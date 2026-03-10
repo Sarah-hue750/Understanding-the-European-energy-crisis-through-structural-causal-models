@@ -1,0 +1,195 @@
+import sys
+sys.path.append('../../.')
+
+from pathlib import Path
+# Resolve parent of this file (file's directory → parent)
+PARENT = Path(__file__).resolve().parent.parent
+#PARENT = Path(__file__).resolve().parent
+sys.path.insert(0, str(PARENT))
+sys.path.append('../')
+sys.path.append('./')
+
+import pandas as pd
+
+import xgboost as xgb
+
+from utils.flow_adapted import CausalLinks, build_feature_graph, GraphExplainer, edge_credits2edge_credit, translator, create_xgboost_f
+from utils.flow_adapted import build_feature_graph
+from utils.helper_functions import calculate_edge_credit, read_csv_incl_timeindex
+from utils.feature_configuration import edges_FR_price, edges_FR_export, edges_ES_price, additional_nuc_avail
+
+
+import time
+import dill
+import tqdm
+import multiprocess as mp
+import os
+
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Calculate Shapley flow edge credits for GBT model')
+    parser.add_argument('--reduced_features', action="store_true", default=True, help='Whether to use reduced feature set')
+    parser.add_argument('--target', type=str, default='FR_price', help='Target variables to explain')    
+    parser.add_argument('--what_if', action="store_true", help='Whether to calculate what-if Shapley flow edge credits (instead of actual Shapley flow edge credits)')
+    return parser.parse_args()
+
+args = parse_args()
+print(args)
+
+target_names = ['price_da_FR', 'net_export_FR', 'price_da_ES']
+
+reduced_features = args.reduced_features 
+
+if reduced_features:
+    version = 'revision/reduced_features'
+    data_version = 'revision' # this is just implemented to load the data from the same folder in both cases
+else:
+    version = 'revision'
+    data_version = version
+
+periods = [('2018-01-01', '2023-12-31')]
+
+
+
+targets = [args.target] # [args.target] #['FR_export'] #, 'FR_export', 'ES_price''
+
+
+for target in targets:
+    print(target)
+    if target == 'FR_price':
+        edges = edges_FR_price
+    elif target == 'FR_export':
+        edges = edges_FR_export
+    elif target == 'ES_price':
+        edges = edges_ES_price
+
+    for start_date, end_date in periods:
+        model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date, version)
+
+        X_full = read_csv_incl_timeindex('./data/{}/X_full_{}.csv'.format(data_version, model_name))
+        X_train = read_csv_incl_timeindex('./data/{}/X_train_{}.csv'.format(data_version, model_name))
+        X_test = read_csv_incl_timeindex('./data/{}/X_test_{}.csv'.format(data_version, model_name))
+        if reduced_features:
+            X_test_features_reduced = read_csv_incl_timeindex('./data/{}/X_test_features_reduced_{}.csv'.format(version, model_name))
+
+        if args.what_if:    
+            print('Calculate what-if Shapley flow edge credits for model: {}'.format(model_name))
+            if target == 'FR_price':
+                    additional_nuc_avail = 10000
+                    X_test = X_test[(X_test.index >= pd.to_datetime('2022-01-01 00:00:00', utc=True)) & (X_test.index < pd.to_datetime('2023-01-01 00:00:00', utc=True))]
+                    X_test['nuclear_avail_rte_FR'] += additional_nuc_avail
+            elif target == 'ES_price':
+                file_path = './data/{}/dataset_all_features/data_selected_2018-2023.csv'.format(data_version)
+                dataset_all_features = pd.read_csv(file_path, index_col=0, parse_dates=True)
+                X_test = X_test[(X_test.index >= pd.to_datetime('2022-06-15 00:00:00', utc=True)) & (X_test.index < pd.to_datetime('2023-02-27 00:00:00', utc=True))]
+                X_test['gas_price_ES'] = dataset_all_features.loc[X_test.index, 'gas_price_MIBGAS']
+            elif target == 'FR_export':
+                print('No what-if scenario implemented for FR export, ' \
+                'calculating actual Shapley flow edge credits instead.')
+
+        model = xgb.Booster()
+        model.load_model("./models/{}/{}_best.json".format(version, model_name))
+        seed = 7
+        
+        n_bg = 96 # number of sampled background samples
+        nsamples = 1000 # number of forefround samples to explain
+        nruns = 750 # number of runs for Shapley flow (number of permutations to sample for Shapley value estimation)
+
+        # choose background samples from training set to be more realistic 
+        # (and also to be able to use full dataset for building surrogate models instead of only test set)
+        bg = X_train.sample(n=n_bg, random_state=seed) # background samples
+        fg = X_test.sample(n=nsamples, random_state=seed) # foreground samples (samples to explain)
+
+        # save foreground and background samples for later use (e.g. for plotting)
+        if not args.what_if:
+            bg.to_csv('./credit_flow/{}/bg_{}.csv'.format(version, model_name), sep=',', index=True)
+            fg.to_csv('./credit_flow/{}/fg_{}.csv'.format(version, model_name), sep=',', index=True)
+        else:
+            bg.to_csv('./credit_flow/{}/what_if/bg_{}.csv'.format(version, model_name), sep=',', index=True)
+            fg.to_csv('./credit_flow/{}/what_if/fg_{}.csv'.format(version, model_name), sep=',', index=True)
+
+        causal_links = CausalLinks()
+        categorical_feature_names = []
+
+        display_translator = translator(X_full.columns, X_full, X_full)
+
+        feature_names = list(X_test.columns)
+        if reduced_features:
+            feature_names_reduced = list(X_test_features_reduced.columns)
+        
+        # build causal graph from edges
+        for edge in edges:
+            node_cause = edge[0]
+            node_effect = edge[1]
+            if node_effect not in target_names:
+                if not node_cause in feature_names:
+                    print('Node_cause (parent node) not in feature_names: {}'.format(node_cause))
+                causal_links.add_causes_effects(node_cause, node_effect)
+        
+        # add edges from features to target
+        # if we use reduced feature set, we only add edges from reduced feature set to target, this is analogous to the causal graph.
+        # Otherwise we add edges from all features to target 
+        if reduced_features:
+            causal_links.add_causes_effects(feature_names_reduced, 
+                                            target, #target_name, 
+                                            create_xgboost_f(feature_names_reduced, model))
+            print(feature_names, '\n',feature_names_reduced)
+        else:
+            causal_links.add_causes_effects(feature_names, 
+                            target, #target_name, 
+                            create_xgboost_f(feature_names, model))
+            print(feature_names, '\n',feature_names)
+
+        causal_graph, r2_scores = build_feature_graph(X_full,  # !!! use full dataset instead of test set!!!
+                                        causal_links=causal_links, 
+                                        categorical_feature_names=categorical_feature_names,
+                                        display_translator=display_translator,
+                                        target_name=target,# target_name=target_name,
+                                        method='xgboost')
+        if not args.what_if:
+            with open('./credit_flow/{}/causal_graph_{}.pkl'.format(version, model_name), 'wb') as file:
+                dill.dump(causal_graph, file)
+            with open('./credit_flow/{}/r2_scores_{}.pkl'.format(version, target), 'wb') as file:
+                dill.dump(r2_scores, file)
+        else:
+            with open('./credit_flow/{}/what_if/causal_graph_{}.pkl'.format(version, model_name), 'wb') as file:
+                dill.dump(causal_graph, file)
+            with open('./credit_flow/{}/what_if/r2_scores_{}.pkl'.format(version, target), 'wb') as file:
+                dill.dump(r2_scores, file)
+
+        #calculate multiple background result (same as in income.ipynb in the Shapley Flow repository) 
+        # in parallel to speed up calculation (this is the most time consuming part)
+        # change this to a suitable value, depending on machine (e.g. 6, 12; on cluster 20)
+        num_processes = 96 
+
+        start = time.time()
+
+        model.set_param('n_jobs', -1)
+        model.set_param('device', 'cpu')
+
+        pool = mp.Pool(num_processes)
+        _args = [(causal_graph, bg[i:i+1], fg, nruns) for i in range(len(bg))]
+        edge_credits = pool.starmap(calculate_edge_credit, tqdm.tqdm(_args, total=len(_args)))
+        pool.close()
+        pool.join()
+
+        end = time.time()
+        print('Calculation time: ', end - start)
+        
+        # We need this step for being able to draw shapley flow (need to call shap_values for one bg sample redundandly)
+        model.set_param('n_jobs', 96) 
+        explainer = GraphExplainer(causal_graph, bg[0:1], nruns, silent=False)
+        cf = explainer.shap_values(fg)
+        # save credit flow to file
+        cf.edge_credit = edge_credits2edge_credit(edge_credits, cf.graph)
+        
+        if not args.what_if:
+            directory = './credit_flow/{}'.format(version)
+        else:
+            directory = './credit_flow/{}/what_if'.format(version)
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        with open('{}/flow_{}.pkl'.format(directory, model_name), 'wb') as file:
+            dill.dump(cf, file)

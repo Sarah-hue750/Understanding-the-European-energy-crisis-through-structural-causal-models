@@ -1,0 +1,8 @@
+{
+    "python.formatting.provider": "black",
+    "ruff.lint.enable": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit"
+    }
+
+}
