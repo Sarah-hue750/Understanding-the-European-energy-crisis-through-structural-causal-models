@@ -7,5 +7,5 @@ The adapted functions for calculating Shapley Flow values, based on https://gith
 - models: Contains the trained GBT models
 - notebooks: Contains several notebooks for reproducing the figures form the paper, as well as the model performances
 - results: contains the r2-scores as well as the correlation of Shapley Flow values and model features for picture the causal graph
-- scripts_ Contains the scripts for data preparation in order to create the models, data visualization, training of the GBT models, and the calculation of the Shapley Flow values
+- scripts: Contains the scripts for data preparation in order to create the models, data visualization, training of the GBT models, and the calculation of the Shapley Flow values
 - utils: contains support functions that are used for the functions in scripts and notebooks
