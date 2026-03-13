@@ -1,30 +1,46 @@
-# This file includes code adapted from the PyWhy project (https://github.com/py-why)
-# Licensed under the MIT License:
-# 
-# MIT License
-
-#     Copyright (c) PyWhy contributors. All rights reserved.
-
-#     Permission is hereby granted, free of charge, to any person obtaining a copy
-#     of this software and associated documentation files (the "Software"), to deal
-#     in the Software without restriction, including without limitation the rights
-#     to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-#     copies of the Software, and to permit persons to whom the Software is
-#     furnished to do so, subject to the following conditions:
-
-#     The above copyright notice and this permission notice shall be included in all
-#     copies or substantial portions of the Software.
-
-#     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-#     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-#     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-#     AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-#     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-#     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-#     SOFTWARE
-
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+import os
+import numpy as np
+import seaborn as sns
+
+from scripts.utils import scale_font_latex
+from scripts.constants import VAR_NAMES_MAP, EC_BY_YEARS, YEARS_BY_EC, EC_LEGEND
+
+
+def plot_coefficients_grouped(df, ax):
+    heights = {
+        "Before energy crisis": df["before_ec"],
+        "During energy crisis": df["during_ec"],
+        "Total time": df["total"],
+    }
+
+    x = np.arange(len(df.index))  # the label locations
+    width = 0.25  # the width of the bars
+    multiplier = 0
+    color = sns.color_palette("colorblind")
+
+    for time, values in heights.items():
+        offset = width * multiplier
+        rects = ax.bar(x + offset, values, width, label=time, color=color[multiplier])
+        # ax.bar_label(rects, padding=3)
+        multiplier += 1
+
+    ax.set_xticks(x + width, df.index)
+    ax.legend(
+        loc="lower left",
+        ncol=3,
+        frameon=False,
+        bbox_to_anchor=(0.0, 1.02, 1.0, 0.102),
+        mode="expand",
+        borderaxespad=0.0,
+    )
+    ax.grid(True)
+    _ = plt.setp(
+        ax.xaxis.get_majorticklabels(), rotation=45, ha="right", rotation_mode="anchor"
+    )
 
 
 def plot_coefficients(df, col, ax, color):
@@ -33,14 +49,18 @@ def plot_coefficients(df, col, ax, color):
 
     Parameters:
     df (pandas.DataFrame): DataFrame containing the coefficients.
-    col (str): The column name in the DataFrame to plot as the height of the bars.
-    ax (matplotlib.axes.Axes): The matplotlib axes object on which to plot the bar chart.
+    col (str): The column name in the DataFrame to plot.
+    ax (matplotlib.axes.Axes): The axes on which to plot the bar chart.
     color (str): The color of the bars.
 
     Returns:
     None
     """
-    ax.bar(x=df.index, height=df[col], color=color)
+    ax.bar(
+        x=df.index,
+        height=df[col],
+        color=color,
+    )
     plt.axhline(0, color="black", linewidth=0.8, linestyle="--")
     _ = plt.setp(
         ax.xaxis.get_majorticklabels(), rotation=45, ha="right", rotation_mode="anchor"
@@ -48,25 +68,23 @@ def plot_coefficients(df, col, ax, color):
 
 
 def plot_evaluation_results_custom(
-    evaluation_result, ax, bins=None, savepath=None, display=True
+    evaluation_result, ax, bins=None, title="", savepath="", display=True
 ):
     """
-    Plot a custom flasification histogram.
+    Plot a custom evaluation histogram.
     adapted from: from dowhy.gcm.falsify import plot_evaluation_results
     https://github.com/py-why/dowhy/blob/main/dowhy/gcm/falsify.py
-    
+
     Parameters:
-    evaluation_result (dowhy.gcm.falsify.FalsificationResult): The evaluation result to plot, containing the summary of falsification tests.
+    evaluation_result (dowhy.gcm.falsify.FalsificationResult): The evaluation result to plot.
     ax (matplotlib.axes.Axes): The axes on which to plot the histogram.
-    bins (int or sequence, optional): The number of bins or bin edges for the histogram. Defaults to None.
-    savepath (str, optional): The file path to save the plot. If None, the plot is not saved. Defaults to None.
-    display (bool, optional): Whether to display the plot using `plt.show()`. Defaults to True.
+    bins (int or sequence, optional): The bins for the histogram.
+    title (str, optional): The title of the plot.
+    savepath (str, optional): The path to save the plot.
+    display (bool, optional): Whether to display the plot.
 
     Returns:
-    tuple:
-            A tuple containing:
-            - labels (list of str): Descriptions of the violations for each falsification method.
-            - p_values (str): A formatted string summarizing the p-values for each falsification method.
+    tuple: A tuple containing the labels and p-values.
     """
     from dowhy.gcm.falsify import FalsifyConst, FALSIFY_METHODS
 
@@ -109,8 +127,267 @@ def plot_evaluation_results_custom(
         ax.set_ylim([0, ylim])
 
     ax.margins(0.05, 0)
-    if savepath:
-        plt.savefig(savepath, bbox_inches="tight")
-    if display:
-        plt.show()
     return labels, p_values
+
+
+def plot_falsification_hist(falsification, fig_dir):
+    # Falsification Histogram
+
+    COLORS = list(mcolors.TABLEAU_COLORS.values())
+
+    legend_elements = [
+        Line2D(
+            [0],
+            [0],
+            linestyle="--",
+            color=COLORS[0],
+            lw=1,
+            label="Violations of TPa of given DAGs",
+        ),
+        Line2D(
+            [0],
+            [0],
+            linestyle="--",
+            color=COLORS[1],
+            label="Violations of LMC of given DAGs",
+        ),
+        Patch(
+            facecolor=COLORS[0],
+            alpha=0.5,
+            edgecolor="black",
+            label="Violations of TPa of permuted DAGs",
+        ),
+        Patch(
+            facecolor=COLORS[1],
+            alpha=0.5,
+            edgecolor="black",
+            label="Violations of LMC of permuted DAGs",
+        ),
+    ]
+
+    scale_font_latex(1.5)
+
+    os.makedirs(fig_dir + "falsification/", exist_ok=True)
+    p_values = []
+
+    for t, evaluation_result in falsification.items():
+        fig, ax = plt.subplots(1, 1, figsize=(16, 9), sharex=True)
+        lable, p_value = plot_evaluation_results_custom(
+            evaluation_result=evaluation_result, ax=ax
+        )
+        p_values.append(p_value)
+        ax.set_xlabel("Fraction of violations")
+        ax.set_ylabel("# Permutations")
+
+        fig.legend(
+            loc="upper left",
+            frameon=False,
+            bbox_to_anchor=(0.0, 1.3),
+            borderaxespad=0.0,
+            handles=legend_elements,
+        )
+
+        fig.savefig(
+            fig_dir + f"falsification/falsification_histogram_custom_{t}.pdf",
+            bbox_inches="tight",
+        )
+        plt.show()
+        fig.clf()
+
+    if len(falsification.keys()) == 3:
+        fig, axes = plt.subplots(3, 1, figsize=(16, 16), sharex=True)
+        fig.legend(
+            loc="upper left",
+            frameon=False,
+            bbox_to_anchor=(0.0, 1.3),
+            borderaxespad=0.0,
+            handles=legend_elements,
+        )
+        for ax, key in zip(axes, falsification.keys()):
+            lable, p_value = plot_evaluation_results_custom(
+                evaluation_result=falsification[key], ax=ax
+            )
+            p_values.append(p_value)
+            ax.set_xlabel("Fraction of violations")
+            ax.set_ylabel("# Permutations")
+            ax.annotate(
+                text=EC_BY_YEARS[key], xy=(0.06, 0.79), xycoords="axes fraction"
+            )
+
+        fig.savefig(
+            fig_dir + f"falsification/falsification_histogram_custom_grouped.pdf",
+            bbox_inches="tight",
+        )
+        plt.show()
+        fig.clf()
+
+
+def plot_r2_scores(r2_scores, color, fig_dir):
+    # r2-scores:
+    scale_font_latex(1.25)
+    os.makedirs(fig_dir + "falsification/", exist_ok=True)
+    df = r2_scores
+    df = df.rename(index=VAR_NAMES_MAP)
+    for col in df.columns:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4.5))
+        plot_coefficients(df=df, col=col, ax=ax, color=color)
+        ax.set_ylabel("R2 score")
+        ax.tick_params(axis="x", labelsize=16)
+        fig.savefig(fig_dir + f"falsification/r2_scores_{col}.pdf", bbox_inches="tight")
+        plt.show()
+        ax.cla()
+        fig.clf()
+    if len(df.columns) == 3:
+        # plot grouped coefficients
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4.5))
+        df = df.rename(columns=EC_BY_YEARS)
+        plot_coefficients_grouped(df=df, ax=ax)
+        ax.set_ylabel("R2 score")
+        ax.tick_params(axis="x", labelsize=16)
+        fig.savefig(
+            fig_dir + f"falsification/r2_scores_grouped.pdf", bbox_inches="tight"
+        )
+        plt.show()
+        ax.cla()
+        fig.clf()
+
+
+def plot_total_coefficients(
+    coefficients,
+    data_by_time,
+    unit,
+    color,
+    fig_dir,
+    exports=False,
+):
+    os.makedirs(fig_dir + "coefficients/", exist_ok=True)
+    scale_font_latex(1.5)
+    # plot structure coefficient times delta_x
+
+    df = coefficients.drop("intercept")
+    df = df.rename(index=VAR_NAMES_MAP)
+    delta_x = (
+        (data_by_time["during_ec"].mean() - data_by_time["before_ec"].mean())
+        .rename(index=VAR_NAMES_MAP)
+        .loc[df.index]
+    )
+    df_delta_x = df.copy()
+    for col in df.columns:
+        df_delta_x[col] = df[col] * delta_x
+        if exports:
+            df_delta_x[col] = df_delta_x[col] / 1000
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4.5))
+        plot_coefficients(df=df_delta_x, col=col, ax=ax, color=color)
+        print(f"Plotting coefficients multiplied by delta_x:")
+        print(df_delta_x)
+        ax.tick_params(axis="x", labelsize=16)
+        ax.set_ylabel(r"$c_{X} \cdot \Delta \overline{X} \;$ (" + unit + ")")
+        fig.savefig(
+            fig_dir + f"coefficients/coefficients_delta_{col}.pdf", bbox_inches="tight"
+        )
+        plt.show()
+        ax.cla()
+    fig.clf()
+
+    if len(df.columns) == 3:
+        # plot grouped coefficients
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4.5))
+        df_delta_x = df.mul(delta_x, axis=0)
+        if exports:
+            df_delta_x = df_delta_x / 1000
+        df_delta_x = df_delta_x.rename(columns=EC_BY_YEARS)
+        plot_coefficients_grouped(df=df_delta_x, ax=ax)
+        ax.tick_params(axis="x", labelsize=16)
+        ax.set_ylabel(r"$c_{X} \cdot \Delta \overline{X} \;$ (" + unit + ")")
+        fig.savefig(
+            fig_dir + f"coefficients/coefficients_delta_grouped.pdf",
+            bbox_inches="tight",
+        )
+        plt.show()
+        ax.cla()
+
+    # plot structure coefficient times std
+    df = coefficients.drop("intercept")
+    df = df.rename(index=VAR_NAMES_MAP)
+    df_sigma = df.copy()
+    for col in df.columns:
+        sigma_x = (
+            data_by_time[EC_BY_YEARS[col]]
+            .std()
+            .rename(index=VAR_NAMES_MAP)
+            .loc[df.index]
+        )
+        df_sigma[col] = df[col] * sigma_x
+        if exports:
+            df_sigma[col] = df_sigma[col] / 1000
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4.5))
+        plot_coefficients(df=df_sigma, col=col, ax=ax, color=color)
+        print(f"Plotting coefficients multiplied by std for {col}:")
+        print(df_sigma)
+        ax.tick_params(axis="x", labelsize=16)
+        ax.set_ylabel(r"$c_{X} \cdot \sigma_{X} \;$ (" + unit + ")")
+
+        fig.savefig(
+            fig_dir + f"coefficients/coefficients_std_{col}.pdf", bbox_inches="tight"
+        )
+        plt.show()
+        ax.cla()
+    fig.clf()
+    if len(df.columns) == 3:
+        # plot grouped coefficients
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4.5))
+        df_sigma = df.mul(sigma_x, axis=0)
+        if exports:
+            df_sigma = df_sigma / 1000
+        df_sigma = df_sigma.rename(columns=EC_BY_YEARS)
+        plot_coefficients_grouped(df=df_sigma, ax=ax)
+        ax.tick_params(axis="x", labelsize=16)
+        ax.set_ylabel(r"$c_{X} \cdot \sigma_{X} \;$ (" + unit + ")")
+        fig.savefig(
+            fig_dir + f"coefficients/coefficients_sigma_grouped.pdf",
+            bbox_inches="tight",
+        )
+        plt.show()
+        ax.cla()
+
+    # plot all strucutre coefficients
+    df = coefficients.drop("intercept")
+    if exports:
+        for col in df.columns:
+            for idx in df.index:
+                if "gas_price" in idx or "carbon_price" in idx:
+                    df.loc[idx] /= 100  # convert to 100
+    else:
+        for col in df.columns:
+            for idx in df.index:
+                if (
+                    "gas_price" not in idx
+                    and "carbon_price" not in idx
+                    and "net_export" not in idx
+                ):
+                    df.loc[idx] *= 1000  # convert to GW
+    df = df.rename(index=VAR_NAMES_MAP)
+    for col in df.columns:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4.5))
+        plot_coefficients(df=df, col=col, ax=ax, color=color)
+        ax.tick_params(axis="x", labelsize=16)
+        ax.set_ylabel(r"$c_{X}$ (mixed units)")
+        fig.savefig(
+            fig_dir + f"coefficients/all_coefficients_{col}.pdf", bbox_inches="tight"
+        )
+        plt.show()
+        ax.cla()
+    fig.clf()
+    if len(df.columns) == 3:
+        # plot grouped coefficients
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4.5))
+        df = df.rename(columns=EC_BY_YEARS)
+        plot_coefficients_grouped(df=df, ax=ax)
+        ax.tick_params(axis="x", labelsize=16)
+        ax.set_ylabel(r"$c_{X}$ (mixed units)")
+        fig.savefig(
+            fig_dir + f"coefficients/all_coefficients_grouped.pdf",
+            bbox_inches="tight",
+        )
+        plt.show()
+        ax.cla()
