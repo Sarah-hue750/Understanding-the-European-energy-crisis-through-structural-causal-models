@@ -1,25 +1,9 @@
 """
-This module defines constants, dictionaries, and mappings related to energy generation and European bidding zones (BZNs).
-Constants:
------------
-- ENERGY_CRISIS: A pandas Timestamp marking the start of the energy crisis (October 1, 2021, UTC).
-Lists:
-------
-- EUROPEAN_BZN: A list of European bidding zones (BZNs) represented by their codes.
-Dictionaries:
--------------
-- GEN_COLUMN_MAP: Maps energy generation and consumption types to their corresponding column names in a dataset.
-- GEN_COLUMN_MAP_ALT: A modified version of GEN_COLUMN_MAP that removes entries related to consumption and the phrase "Actual Aggregated".
-- bzn_to_country: Maps bidding zone codes (BZNs) to their corresponding country codes.
-- COUNTRY_CODE_TO_COUNTRY: Maps specific bidding zone codes to their corresponding country codes, consolidating sub-regions into a single country code.
-Derived Variables:
-------------------
-- country_codes: A list of unique country codes derived from the `bzn_to_country` dictionary.
+This module defines dictionaries, and mappings related to energy generation and European bidding zones (BZNs).
 """
 
 import pandas as pd
 
-ENERGY_CRISIS = pd.Timestamp("20211001", tz="UTC")
 
 EUROPEAN_BZN = [
     "AT",

@@ -5,7 +5,7 @@ from dowhy.graph import is_root_node
 
 def compare_coefficients(graph_name: str, var: str, years: list) -> pd.DataFrame:
     """
-    Load the results of the 04-evaluate_scm notebook and create a DataFrame of structural coefficients for different times as columns.
+    Load the results of the 04-evaluate_scm and create a DataFrame of structural coefficients for different times as columns.
 
     Parameters:
     graph_name (str): The name of the causal graph.

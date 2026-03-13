@@ -166,6 +166,7 @@ def convert_to_cc_index(df):
     pandas.DataFrame: The DataFrame with country codes as the index.
     """
     new_index = sorted(drop_duplicates(country_codes + COUNTRY_CODES_ALT))
+    df = df[~df.index.duplicated(keep="first")]
     df = df.reindex(new_index)
     for k, v in COUNTRY_CODE_TO_COUNTRY.items():
         df.loc[k] = df.loc[v]
