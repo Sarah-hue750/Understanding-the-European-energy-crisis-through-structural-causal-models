@@ -6,7 +6,7 @@ import pandas as pd
 import pickle as pkl
 from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import accuracy_score, r2_score
+from sklearn.metrics import accuracy_score, r2_score, mean_absolute_error, root_mean_squared_error
 from sklearn.model_selection import train_test_split
 from scipy.stats import randint, uniform
 from dowhy import gcm
@@ -95,8 +95,17 @@ def train_test_evaluation(selected_graph, data, test_size=0.2):
     data = data.loc[:, nodes].dropna()
     train_df, test_df = split_by_week(data, test_size=test_size)
     causal_model = create_causal_model(graph, train_df)
+    
+    return causal_model, train_df, test_df
+
+def get_evaluation_on_test(causal_model, train_df, test_df, data_original, normalize=False):
+    """
+    Returns R2, mean absolut error and root mean squared error of the causal model.
+    """
     # Evaluate on test set
     r2_scores = {}
+    mae_scores = {}
+    rmse_scores = {}
     for node in causal_model.graph.nodes:
         if is_root_node(causal_model.graph, node):
             continue
@@ -108,12 +117,18 @@ def train_test_evaluation(selected_graph, data, test_size=0.2):
         ].to_numpy()
         conditional_expectations = (
             gcm.model_evaluation._estimate_conditional_expectations(
-                causal_mechanism, parent_data_test, categorical, 50
+                causal_mechanism, parent_data_test, categorical, 0
             )
         )
         r2_scores[node] = r2_score(test_df[node], conditional_expectations)
+        if normalize:
+            mae_scores[node] = mean_absolute_error(test_df[node], conditional_expectations)*data_original[node].std()
+            rmse_scores[node] = root_mean_squared_error(test_df[node], conditional_expectations)*data_original[node].std()
+        else:
+            mae_scores[node] = mean_absolute_error(test_df[node], conditional_expectations)
+            rmse_scores[node] = root_mean_squared_error(test_df[node], conditional_expectations)
 
-    return causal_model, r2_scores, train_df, test_df
+    return r2_scores, mae_scores, rmse_scores
 
 
 # get structural coefficients
@@ -226,15 +241,24 @@ def create_eval_scm(
 
     if not load_model:
         print("creating causal model")
-        causal_model, r2_scores, train_df, test_df = train_test_evaluation(
+        causal_model, train_df, test_df = train_test_evaluation(
             selected_graph, data, test_size=0.2
         )
         print("saving causal model")
         with open(causal_model_path, "wb") as f:
             pkl.dump(causal_model, f)
+    train_df, test_df = split_by_week(data, test_size=0.2)
+    r2_scores, mae_scores, rmse_scores = get_evaluation_on_test(causal_model, train_df, test_df, data_original = df_data_original, normalize=normalize)
+        
 
-        dir_r2_scores = os.path.join(dir, "r2_scores")
-        save_file(r2_scores, dir=dir_r2_scores, filename=f"{name}_{years}_r2_scores")
+    dir_r2_scores = os.path.join(dir, "r2_scores")
+    save_file(r2_scores, dir=dir_r2_scores, filename=f"{name}_{years}_r2_scores")
+        
+    dir_mae_scores = os.path.join(dir, "mae_scores")
+    save_file(mae_scores, dir=dir_mae_scores, filename=f"{name}_{years}_mae_scores")
+        
+    dir_rmse_scores= os.path.join(dir, "rmse_scores_scores")
+    save_file(rmse_scores, dir=dir_rmse_scores, filename=f"{name}_{years}_rmse_scores")
 
     if with_coefficients:
         print("get coefficients")
