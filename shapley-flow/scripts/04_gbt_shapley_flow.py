@@ -96,8 +96,7 @@ for target in targets:
         nsamples = 1000 # number of forefround samples to explain
         nruns = 750 # number of runs for Shapley flow (number of permutations to sample for Shapley value estimation)
 
-        # choose background samples from training set to be more realistic 
-        # (and also to be able to use full dataset for building surrogate models instead of only test set)
+        # choose background samples from training set and foreground samples from test set (this is just for consistency with the Shapley flow framework)
         bg = X_train.sample(n=n_bg, random_state=seed) # background samples
         fg = X_test.sample(n=nsamples, random_state=seed) # foreground samples (samples to explain)
 
@@ -141,7 +140,8 @@ for target in targets:
                             create_xgboost_f(feature_names, model))
             print(feature_names, '\n',feature_names)
 
-        causal_graph, r2_scores = build_feature_graph(X_full,  # !!! use full dataset instead of test set!!!
+        # build surrogate models for all nodes in the causal graph and calculate R2 scores for the surrogate models (this is just for evaluation, not necessary for Shapley flow calculation)
+        causal_graph, r2_scores = build_feature_graph(X_full,
                                         causal_links=causal_links, 
                                         categorical_feature_names=categorical_feature_names,
                                         display_translator=display_translator,
