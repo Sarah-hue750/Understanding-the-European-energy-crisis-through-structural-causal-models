@@ -11,7 +11,7 @@ from utils.feature_configuration import paper_rename_dict, target_names, calenda
 
 def calculate_edge_credit(causal_graph, bg_i, fg, nruns, silent=True):
     """
-    calculate edge credit using shapley flow method for one background sample (bg_i) and foreground sample (fg)
+    calculate edge credit using Shapley Flow method for one background sample (bg_i) and foreground sample (fg)
     
     Parameters:
     causal_graph: the causal graph built from the data and model, should be in the format of a dictionary where keys are parent nodes and values are dictionaries of child nodes and their corresponding functions
@@ -296,6 +296,28 @@ def draw(idx=-1, max_display=None, format_str="{:.2f}",
 
 def plot_dependency(name1, name2, cf, fg_values, color=None, figsize=(8, 7), x_label='', 
                     fig = None, axes = None, color_label='', scale_color=1, scale_x=1, scale_y = 1, label = None):
+    '''
+    plot the dependency between feature value and shapley flow value for the edge from name1 to name2
+    
+    Parameters:
+    name1: the name of the parent node
+    name2: the name of the child node
+    cf: the causal flow object
+    fg_values: the feature values
+    color: the color of the points
+    figsize: the size of the figure
+    x_label: the label for the x-axis
+    fig: the figure object
+    axes: the axes object
+    color_label: the label for the colorbar
+    scale_color: the scale for the color
+    scale_x: the scale for the x-axis
+    scale_y: the scale for the y-axis
+    label: the label for the points
+    
+    Returns:
+    None
+    '''
     for node1, d in cf.edge_credit.items():
         for node2, val in d.items():
             try:
@@ -329,6 +351,18 @@ def plot_dependency(name1, name2, cf, fg_values, color=None, figsize=(8, 7), x_l
 
 
 def calculate_correlation(name1, name2, cf, fg_values):
+    '''
+    calculate correlation between feature value and shapley flow value for the edge from name1 to name2
+    
+    Parameters:
+    name1: the name of the parent node
+    name2: the name of the child node
+    cf: the causal flow object
+    fg_values: the feature values
+    
+    Returns:
+    float: correlation value
+    '''
     for node1, d in cf.edge_credit.items():
         for node2, val in d.items():
             if node1.name == name1 and node2.name == name2:
@@ -341,29 +375,28 @@ def calculate_correlation(name1, name2, cf, fg_values):
                 return corr
     raise Exception("Feature not found in graph!")
 
-def rel_symmetric_difference(A, F):
+def rel_symmetric_difference(A: np.ndarray, F: np.ndarray) -> float:
+    '''
+    Calculate the Relative Symmetric Difference between two arrays.
+    
+    Parameters:
+    A (array-like): Actual values.
+    F (array-like): Forecasted values.
+    
+    Returns:
+    float: Relative Symmetric Difference value.
+    '''
     return 2 * np.abs(F - A) / (np.abs(A) + np.abs(F))
 
-def smape(A, F):
+def smape(A: np.ndarray, F: np.ndarray) -> float:
+    '''
+    Calculate the Symmetric Mean Absolute Percentage Error (SMAPE) between two arrays.
+    
+    Parameters:
+    A (array-like): Actual values.
+    F (array-like): Forecasted values.
+    
+    Returns:
+    float: SMAPE value.
+    '''
     return 100/len(A) * np.sum(2 * np.abs(F - A) / (np.abs(A) + np.abs(F)))
-
-def cap_gas_price(data, col_name = 'gas_price', constant_cap_2022_june_dec = 40):
-    col = data[col_name]
-    col_copy = col.copy()
-    threshold = constant_cap_2022_june_dec
-    for j in col.index:
-        if (j.year == 2022) and (j.month >= 6):
-            threshold = constant_cap_2022_june_dec
-        elif j.year == 2023 and j.month < 4:
-            threshold = constant_cap_2022_june_dec + (j.month) * 5
-        elif j.year == 2023 and j.month >= 4 and j.month < 8:
-            threshold = constant_cap_2022_june_dec + 3*5 + 1.1*(j.month - 3)
-        elif j.year == 2023 and j.month >= 8:
-            threshold = constant_cap_2022_june_dec + 3*5 + 1.1*5 + (j.month - 8) * 1.1
-        if col.loc[j] < threshold:
-            col_copy.loc[j] = col.loc[j]
-        else: 
-            col_copy.loc[j] = threshold
-    data_cap = data.copy()
-    data_cap[col_name] = col_copy
-    return data_cap

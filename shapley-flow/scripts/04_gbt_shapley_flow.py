@@ -29,8 +29,7 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Calculate Shapley flow edge credits for GBT model')
-    parser.add_argument('--reduced_features', action="store_true", default=True, help='Whether to use reduced feature set')
-    parser.add_argument('--target', type=str, default='FR_price', help='Target variables to explain')    
+    parser.add_argument('--target', type=str, default='FR_price', help='Target variables to explain. Options are: FR_price, FR_export, ES_price')    
     parser.add_argument('--what_if', action="store_true", help='Whether to calculate what-if Shapley flow edge credits (instead of actual Shapley flow edge credits)')
     return parser.parse_args()
 
@@ -39,13 +38,9 @@ print(args)
 
 target_names = ['price_da_FR', 'net_export_FR', 'price_da_ES']
 
-reduced_features = args.reduced_features 
-
 periods = [('2018-01-01', '2023-12-31')]
 
-
-
-targets = [args.target] # [args.target] #['FR_export'] #, 'FR_export', 'ES_price''
+targets = [args.target]
 
 
 for target in targets:
@@ -63,8 +58,8 @@ for target in targets:
         X_full = read_csv_incl_timeindex('./data/X_full_{}.csv'.format(model_name))
         X_train = read_csv_incl_timeindex('./data/X_train_{}.csv'.format(model_name))
         X_test = read_csv_incl_timeindex('./data/X_test_{}.csv'.format(model_name))
-        if reduced_features:
-            X_test_features_reduced = read_csv_incl_timeindex('./data/X_test_features_reduced_{}.csv'.format(model_name))
+
+        X_test_features_target = read_csv_incl_timeindex('./data/X_test_features_target_{}.csv'.format(model_name))
 
         if args.what_if:    
             print('Calculate what-if Shapley flow edge credits for model: {}'.format(model_name))
@@ -107,8 +102,7 @@ for target in targets:
         display_translator = translator(X_full.columns, X_full, X_full)
 
         feature_names = list(X_test.columns)
-        if reduced_features:
-            feature_names_reduced = list(X_test_features_reduced.columns)
+        feature_names_target = list(X_test_features_target.columns)
         
         # build causal graph from edges
         for edge in edges:
@@ -119,19 +113,12 @@ for target in targets:
                     print('Node_cause (parent node) not in feature_names: {}'.format(node_cause))
                 causal_links.add_causes_effects(node_cause, node_effect)
         
-        # add edges from features to target
-        # if we use reduced feature set, we only add edges from reduced feature set to target, this is analogous to the causal graph.
-        # Otherwise we add edges from all features to target 
-        if reduced_features:
-            causal_links.add_causes_effects(feature_names_reduced, 
+        # add edges from features that have a direct effect on the target to the target, 
+        # with the function being the trained GBT model (this is the "target model" in the Shapley flow analysis)
+        causal_links.add_causes_effects(feature_names_target, 
                                             target, #target_name, 
-                                            create_xgboost_f(feature_names_reduced, model))
-            print(feature_names, '\n',feature_names_reduced)
-        else:
-            causal_links.add_causes_effects(feature_names, 
-                            target, #target_name, 
-                            create_xgboost_f(feature_names, model))
-            print(feature_names, '\n',feature_names)
+                                            create_xgboost_f(feature_names_target, model))
+        print(feature_names, '\n',feature_names_target)
 
         # build surrogate models for all nodes in the causal graph and calculate R2 scores for the surrogate models (this is just for evaluation, not necessary for Shapley flow calculation)
         causal_graph, r2_scores = build_feature_graph(X_full,

@@ -33,7 +33,6 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Calculate Shapley flow edge credits for GBT model')
-    parser.add_argument('--reduced_features', default=True, help='Whether to use reduced feature set'),
     parser.add_argument('--target', type=str, default='FR_price', help='Target variable to explain')    
     return parser.parse_args()
 
@@ -45,9 +44,6 @@ edges_FR_export = [('hour_sin', 'rl_BE'), ('hour_sin', 'rl_ES'), ('hour_sin', 'r
 edges_ES = [('hour_sin', 'rl_FR'), ('hour_sin', 'rl_PT'), ('hour_sin', 'load_da_ES'), ('hour_sin', 'nuclear_avail_esios_ES'), ('hour_sin', 'ssrd_ES'), ('hour_sin', 'wind_speed_100m_ES'), ('hour_sin', 'air_temp_era5_ES'), ('hour_cos', 'rl_FR'), ('hour_cos', 'rl_PT'), ('hour_cos', 'load_da_ES'), ('hour_cos', 'nuclear_avail_esios_ES'), ('hour_cos', 'ssrd_ES'), ('hour_cos', 'wind_speed_100m_ES'), ('hour_cos', 'air_temp_era5_ES'), ('day_of_year_sin', 'rl_FR'), ('day_of_year_sin', 'rl_PT'), ('day_of_year_sin', 'load_da_ES'), ('day_of_year_sin', 'nuclear_avail_esios_ES'), ('day_of_year_sin', 'ssrd_ES'), ('day_of_year_sin', 'wind_speed_100m_ES'), ('day_of_year_sin', 'air_temp_era5_ES'), ('day_of_year_cos', 'rl_FR'), ('day_of_year_cos', 'rl_PT'), ('day_of_year_cos', 'load_da_ES'), ('day_of_year_cos', 'nuclear_avail_esios_ES'), ('day_of_year_cos', 'ssrd_ES'), ('day_of_year_cos', 'wind_speed_100m_ES'), ('day_of_year_cos', 'air_temp_era5_ES'), ('isworkingday_ES', 'rl_FR'), ('isworkingday_ES', 'rl_PT'), ('isworkingday_ES', 'load_da_ES'), ('isworkingday_ES', 'nuclear_avail_esios_ES'), ('air_temp_era5_ES', 'river_temp_ES'), ('air_temp_era5_ES', 'rl_FR'), ('air_temp_era5_ES', 'rl_PT'), ('air_temp_era5_ES', 'load_da_ES'), ('air_temp_era5_ES', 'solar_da_ES'), ('air_temp_era5_ES', 'filling_rate_ES'), ('rl_FR', 'price_da_ES'), ('rl_PT', 'price_da_ES'), ('load_da_ES', 'price_da_ES'), ('nuclear_avail_esios_ES', 'price_da_ES'), ('run_off_gen_ES', 'price_da_ES'), ('solar_da_ES', 'price_da_ES'), ('wind_da_ES', 'price_da_ES'), ('carbon_price_ES', 'price_da_ES'), ('gas_price_ES', 'price_da_ES'), ('filling_rate_ES', 'price_da_ES'), ('ssrd_ES', 'solar_da_ES'), ('wind_speed_100m_ES', 'wind_da_ES'), ('ssrd_ES', 'rl_FR'), ('ssrd_ES', 'rl_PT'), ('wind_speed_100m_ES', 'rl_FR'), ('wind_speed_100m_ES', 'rl_PT'), ('river_temp_ES', 'nuclear_avail_esios_ES'), ('river_temp_ES', 'run_off_gen_ES'), ('river_temp_ES', 'filling_rate_ES'), ('river_flow_mean_ES', 'nuclear_avail_esios_ES'), ('river_flow_mean_ES', 'run_off_gen_ES'), ('river_flow_mean_ES', 'filling_rate_ES'), ('day_of_year_sin', 'river_temp_ES'), ('day_of_year_sin', 'river_flow_mean_ES'), ('day_of_year_sin', 'filling_rate_ES'), ('day_of_year_sin', 'gas_price_ES'), ('day_of_year_cos', 'river_temp_ES'), ('day_of_year_cos', 'river_flow_mean_ES'), ('day_of_year_cos', 'filling_rate_ES'), ('day_of_year_cos', 'gas_price_ES'), ('year', 'carbon_price_ES'), ('year', 'gas_price_ES'), ('year', 'rl_FR'), ('year', 'rl_PT'), ('year', 'load_da_ES'), ('year', 'ssrd_ES'), ('year', 'wind_speed_100m_ES'), ('year', 'air_temp_era5_ES'), ('year', 'river_temp_ES'), ('year', 'river_flow_mean_ES'), ('year', 'solar_da_ES'), ('year', 'wind_da_ES'), ('year', 'nuclear_avail_esios_ES'), ('year', 'run_off_gen_ES'), ('nuclear_avail_rte_FR', 'price_da_ES'), ('year', 'nuclear_avail_rte_FR'), ('hour_sin', 'nuclear_avail_rte_FR'), ('hour_cos', 'nuclear_avail_rte_FR'), ('day_of_year_sin', 'nuclear_avail_rte_FR'), ('day_of_year_cos', 'nuclear_avail_rte_FR'), ('isworkingday_ES', 'nuclear_avail_rte_FR')]
 
 target_names = ['price_da_FR', 'net_export_FR', 'price_da_ES']
-
-
-reduced_features = args.reduced_features
 
 periods = [('2018-01-01', '2023-12-31')]
 
@@ -73,8 +69,7 @@ for target in targets:
         X_train = read_csv_incl_timeindex('./data/X_train_{}.csv'.format(model_name))
 
         X_test = read_csv_incl_timeindex('./data/X_test_{}.csv'.format(model_name))
-        if reduced_features:
-            X_test_features_reduced = read_csv_incl_timeindex('./data/X_test_features_reduced_{}.csv'.format(model_name))
+        X_test_features_target = read_csv_incl_timeindex('./data/X_test_features_target_{}.csv'.format(model_name))
 
         if target == 'FR_price':
             additional_nuc_avail = 10000
@@ -110,8 +105,7 @@ for target in targets:
         display_translator = translator(X_full.columns, X_full, X_full)
 
         feature_names = list(X_test.columns)
-        if reduced_features:
-            feature_names_reduced = list(X_test_features_reduced.columns)
+        feature_names_target = list(X_test_features_target.columns)
         
         for edge in edges:
             node_cause = edge[0]
@@ -122,16 +116,10 @@ for target in targets:
                 #print('skip adding edge to target: {} -> {}'.format(node_cause, node_effect))
                 causal_links.add_causes_effects(node_cause, node_effect)
 
-        if reduced_features:
-            causal_links.add_causes_effects(feature_names_reduced, 
-                                            target, #target_name, 
-                                            create_xgboost_f(feature_names_reduced, model))
-            print(feature_names, '\n',feature_names_reduced)
-        else:
-            causal_links.add_causes_effects(feature_names, 
-                            target, #target_name, 
-                            create_xgboost_f(feature_names, model))
-            print(feature_names, '\n',feature_names)
+        causal_links.add_causes_effects(feature_names_target, 
+                                        target, #target_name, 
+                                        create_xgboost_f(feature_names_target, model))
+        print(feature_names, '\n',feature_names_target)
 
         causal_graph, r2_scores = build_feature_graph(X_full,
                                         causal_links=causal_links, 

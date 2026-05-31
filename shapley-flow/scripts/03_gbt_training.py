@@ -16,12 +16,6 @@ sys.path.append("../")
 
 from utils.helper_functions import read_csv_between, read_csv_incl_timeindex
 
-
-
-reduced_features = True
-
-date = datetime.datetime.now().strftime("%Y-%m-%d")
-
 directory = './models'
 if os.path.exists(directory):
     print("Directory {} already exists. Models will be overwritten.".format(directory))
@@ -43,42 +37,41 @@ for country in countries:
 
 
             # split data into test and train set using a 1-day sliding window split to prevent memorization of target 
-            # (since data is time series data, we cannot use a random split)
             block_size = '1D'
             masker = [pd.Series(g.index) for n, g in X.groupby(pd.Grouper(freq=block_size))]
             train_mask, test_mask = train_test_split(masker, test_size = 0.2, random_state=21)
 
             X_full = X.copy()
             y_full = y.copy()
-            X_full.to_csv('./data/X_full_{}.csv'.format(model_name), sep=',', index=True)
-            y_full.to_csv('./data/y_full_{}.csv'.format(model_name), sep=',', index=True)
 
             X_train = X.loc[pd.concat(train_mask)]
             y_train = y.loc[pd.concat(train_mask)]
             X_test = X.loc[pd.concat(test_mask)]
             y_test = y.loc[pd.concat(test_mask)]
-
-
-            # save test data in order to calculate shap values later
-            X_test.to_csv('./data/X_test_{}.csv'.format(model_name), sep=',', index=True)
-            y_test.to_csv('./data/y_test_{}.csv'.format(model_name), sep=',', index=True)
             
-            # save train data
+            # save full, train and test feature data for the entire dataset
+            X_full.to_csv('./data/X_full_{}.csv'.format(model_name), sep=',', index=True)
             X_train.to_csv('./data/X_train_{}.csv'.format(model_name), sep=',', index=True)
+            X_test.to_csv('./data/X_test_{}.csv'.format(model_name), sep=',', index=True)
+
+            # save train and test data in order to calculate shap values later
             y_train.to_csv('./data/y_train_{}.csv'.format(model_name), sep=',', index=True)
-            print(X_full.shape, X_train.shape, X_test.shape)
-            if reduced_features:
-                with open('./data/features_reduced_model.pkl', 'rb') as f:
-                    features_reduced_model = pickle.load(f)
-                X_full = X_full[features_reduced_model[target]]
-                X_train = X_train[features_reduced_model[target]]
-                X_test = X_test[features_reduced_model[target]]
-                X_full.to_csv('./data/X_full_features_reduced_{}.csv'.format(model_name), sep=',', index=True)
-                X_train.to_csv('./data/X_train_features_reduced_{}.csv'.format(model_name), sep=',', index=True)
-                X_test.to_csv('./data/X_test_features_reduced_{}.csv'.format(model_name), sep=',', index=True)
-                y_full.to_csv('./data/y_full_{}.csv'.format(model_name), sep=',', index=True) # y is saved in two folders at the moment
-                y_train.to_csv('./data/y_train_{}.csv'.format(model_name), sep=',', index=True)
-                y_test.to_csv('./data/y_test_{}.csv'.format(model_name), sep=',', index=True)
+
+            with open('./data/features_target_model.pkl', 'rb') as f:
+                features_target_model = pickle.load(f)
+
+            # save train and test data with only the features that have a direct edge to the target variable in the causal graph, 
+            # for the "target model" in the Shapley flow analysis
+            X_full = X_full[features_target_model[target]]
+            X_train = X_train[features_target_model[target]]
+            X_test = X_test[features_target_model[target]]
+
+            X_full.to_csv('./data/X_full_features_target_{}.csv'.format(model_name), sep=',', index=True)
+            X_train.to_csv('./data/X_train_features_target_{}.csv'.format(model_name), sep=',', index=True)
+            X_test.to_csv('./data/X_test_features_target_{}.csv'.format(model_name), sep=',', index=True)
+            y_full.to_csv('./data/y_full_{}.csv'.format(model_name), sep=',', index=True) # y is saved in two folders at the moment
+            y_train.to_csv('./data/y_train_{}.csv'.format(model_name), sep=',', index=True)
+            y_test.to_csv('./data/y_test_{}.csv'.format(model_name), sep=',', index=True)
             print(X_full.shape, X_train.shape, X_test.shape)
 
             masker_train = [pd.Series(g.index) for n, g in X_train.groupby(pd.Grouper(freq=block_size)) if len(g) > 0]

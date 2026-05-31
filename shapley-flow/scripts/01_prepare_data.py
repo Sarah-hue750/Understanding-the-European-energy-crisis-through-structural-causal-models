@@ -76,24 +76,24 @@ X_FR.to_csv('{}/X_FR_full.csv'.format(directory), sep=',', index=True)
 X_ES.to_csv('{}/X_ES_full.csv'.format(directory), sep=',', index=True)
 
 # Save features that have a direct edge in the causal graph to the target variable, 
-# to be used for a reduced model in the Shapley flow analysis
-features_reduced_model = {}
-features_reduced_model['FR_price'] = []
+# to be used for a "target model" (the model predicting the target variable) in the Shapley flow analysis
+features_target_model = {}
+features_target_model['FR_price'] = []
 for node1,node2 in edges_FR_price:
     if node2 == 'price_da_FR':
-        features_reduced_model['FR_price'].append(node1)
-features_reduced_model['FR_export'] = []
+        features_target_model['FR_price'].append(node1)
+features_target_model['FR_export'] = []
 for node1,node2 in edges_FR_export:
     if node2 == 'net_export_FR':
-        features_reduced_model['FR_export'].append(node1)
-features_reduced_model['ES_price'] = []
+        features_target_model['FR_export'].append(node1)
+features_target_model['ES_price'] = []
 for node1,node2 in edges_ES_price:
     if node2 == 'price_da_ES':
-        features_reduced_model['ES_price'].append(node1)
+        features_target_model['ES_price'].append(node1)
 
 directory = './data'
 if not os.path.exists(directory):
     os.makedirs(directory)
     
-with open('{}/features_reduced_model.pkl'.format(directory), 'wb') as f:
-    pickle.dump(features_reduced_model, f)
+with open('{}/features_target_model.pkl'.format(directory), 'wb') as f:
+    pickle.dump(features_target_model, f)
