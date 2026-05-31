@@ -6,23 +6,21 @@ from pathlib import Path
 PARENT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PARENT))
 
-
-import numpy as np
 import pandas as pd
-
 import xgboost as xgb
 
-from shapflow.flow import CausalLinks
-from shapflow.flow import build_feature_graph
-from shapflow.flow import GraphExplainer
-from shapflow.flow import edge_credits2edge_credit, node_dict2str_dict
-from shapflow.flow import translator, create_xgboost_f
-from shapflow.flow import Node, Graph
-from shapflow.flow import CreditFlow
+from shapflow.flow import (
+    CausalLinks,
+    build_feature_graph,
+    GraphExplainer,
+    edge_credits2edge_credit,
+    create_xgboost_f,
+    translator,
+)
 
-from shap_flow_util import read_csv_incl_timeindex, read_csv_between
+from utils.helper_functions import read_csv_incl_timeindex, calculate_edge_credit
 
-from flow_adapted import build_feature_graph
+from flow_adapted import CausalLinks, build_feature_graph
 
 
 import time
@@ -30,7 +28,6 @@ import dill
 import tqdm
 import multiprocess as mp
 import os
-from shap_flow_util import calculate_edge_credit
 
 import argparse
 
@@ -50,20 +47,14 @@ edges_ES = [('hour_sin', 'rl_FR'), ('hour_sin', 'rl_PT'), ('hour_sin', 'load_da_
 target_names = ['price_da_FR', 'net_export_FR', 'price_da_ES']
 
 
-reduced_features = args.reduced_features #True
-if reduced_features:
-    version = 'revision/reduced_features'
-    data_version = 'revision' # this is just implemented to load the data from the same folder in both cases
-else:
-    version = 'revision'
-    data_version = version
+reduced_features = args.reduced_features
 
 periods = [('2018-01-01', '2023-12-31')]
 
-file_path = '../data_collection_juelich/data_version4/data_selected_2018-2023.csv'
+file_path = 'data/dataset_all_features/data_selected_2018-2023.csv'
 data_full = pd.read_csv(file_path, index_col=0, parse_dates=True)
 
-targets = [args.target] #['FR_export'] #, 'FR_export', 'ES_price''
+targets = [args.target]
 
 
 for target in targets:
@@ -76,14 +67,14 @@ for target in targets:
         edges = edges_ES
 
     for start_date, end_date in periods:
-        model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date, version)
+        model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date)
         
-        X_full = read_csv_incl_timeindex('./data/{}/X_full_{}.csv'.format(data_version, model_name))
-        X_train = read_csv_incl_timeindex('./data/{}/X_train_{}.csv'.format(data_version, model_name))
+        X_full = read_csv_incl_timeindex('./data/X_full_{}.csv'.format(model_name))
+        X_train = read_csv_incl_timeindex('./data/X_train_{}.csv'.format(model_name))
 
-        X_test = read_csv_incl_timeindex('./data/{}/X_test_{}.csv'.format(data_version, model_name))
+        X_test = read_csv_incl_timeindex('./data/X_test_{}.csv'.format(model_name))
         if reduced_features:
-            X_test_features_reduced = read_csv_incl_timeindex('./data/{}/X_test_features_reduced_{}.csv'.format(version, model_name))
+            X_test_features_reduced = read_csv_incl_timeindex('./data/X_test_features_reduced_{}.csv'.format(model_name))
 
         if target == 'FR_price':
             additional_nuc_avail = 10000
@@ -100,7 +91,7 @@ for target in targets:
         print(X_test.shape)
 
         model = xgb.Booster()
-        model.load_model("./models/{}/{}_best.json".format(version, model_name))
+        model.load_model("./models/{}_best.json".format(model_name))
         seed = 7
         
         n_bg = 96 # number of sampled background samples 
@@ -111,8 +102,8 @@ for target in targets:
         bg = X_train.sample(n=n_bg, random_state=seed) # background samples
         fg = X_test.sample(n=nsamples, random_state=seed) # foreground samples (samples to explain)
 
-        bg.to_csv('./credit_flow/{}/what_if/bg_{}.csv'.format(version, model_name), sep=',', index=True)
-        fg.to_csv('./credit_flow/{}/what_if/fg_{}.csv'.format(version, model_name), sep=',', index=True)
+        bg.to_csv('./credit_flow/what_if/bg_{}.csv'.format(model_name), sep=',', index=True)
+        fg.to_csv('./credit_flow/what_if/fg_{}.csv'.format(model_name), sep=',', index=True)
 
         causal_links = CausalLinks()
         categorical_feature_names = []
@@ -148,17 +139,16 @@ for target in targets:
                                         display_translator=display_translator,
                                         target_name=target,# target_name=target_name,
                                         method='xgboost')
-        with open('./credit_flow/{}/what_if/causal_graph_{}.pkl'.format(version, model_name), 'wb') as file:
+        with open('./credit_flow/what_if/causal_graph_{}.pkl'.format(model_name), 'wb') as file:
             dill.dump(causal_graph, file)
-        with open('./credit_flow/{}/what_if/r2_scores_{}.pkl'.format(version, target), 'wb') as file:
+        with open('./credit_flow/what_if/r2_scores_{}.pkl'.format(model_name), 'wb') as file:
             dill.dump(r2_scores, file)
         # causal_graph.draw(rankdir = 'TB')
         # g = causal_graph.to_graphviz('LR')
 
-        #calculate multiple background result (same as in income.ipynb)
+        # calculate multiple background result (same as in income.ipynb)
         # change this to a suitable value, depending on machine (e.g. 6, 12; on cluster 20)
         num_processes = 96 #20
-        from shap_flow_util import calculate_edge_credit
 
         start = time.time()
 
@@ -181,7 +171,7 @@ for target in targets:
         # save credit flow to file
         cf.edge_credit = edge_credits2edge_credit(edge_credits, cf.graph)
         
-        directory = './credit_flow/{}/what_if'.format(version)
+        directory = './credit_flow/what_if'
         if not os.path.exists(directory):
             os.makedirs(directory)
         with open('{}/flow_{}.pkl'.format(directory, model_name), 'wb') as file:

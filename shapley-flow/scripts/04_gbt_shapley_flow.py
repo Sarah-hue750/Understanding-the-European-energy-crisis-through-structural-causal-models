@@ -41,13 +41,6 @@ target_names = ['price_da_FR', 'net_export_FR', 'price_da_ES']
 
 reduced_features = args.reduced_features 
 
-if reduced_features:
-    version = 'revision/reduced_features'
-    data_version = 'revision' # this is just implemented to load the data from the same folder in both cases
-else:
-    version = 'revision'
-    data_version = version
-
 periods = [('2018-01-01', '2023-12-31')]
 
 
@@ -65,13 +58,13 @@ for target in targets:
         edges = edges_ES_price
 
     for start_date, end_date in periods:
-        model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date, version)
+        model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date)
 
-        X_full = read_csv_incl_timeindex('./data/{}/X_full_{}.csv'.format(data_version, model_name))
-        X_train = read_csv_incl_timeindex('./data/{}/X_train_{}.csv'.format(data_version, model_name))
-        X_test = read_csv_incl_timeindex('./data/{}/X_test_{}.csv'.format(data_version, model_name))
+        X_full = read_csv_incl_timeindex('./data/X_full_{}.csv'.format(model_name))
+        X_train = read_csv_incl_timeindex('./data/X_train_{}.csv'.format(model_name))
+        X_test = read_csv_incl_timeindex('./data/X_test_{}.csv'.format(model_name))
         if reduced_features:
-            X_test_features_reduced = read_csv_incl_timeindex('./data/{}/X_test_features_reduced_{}.csv'.format(version, model_name))
+            X_test_features_reduced = read_csv_incl_timeindex('./data/X_test_features_reduced_{}.csv'.format(model_name))
 
         if args.what_if:    
             print('Calculate what-if Shapley flow edge credits for model: {}'.format(model_name))
@@ -80,7 +73,7 @@ for target in targets:
                     X_test = X_test[(X_test.index >= pd.to_datetime('2022-01-01 00:00:00', utc=True)) & (X_test.index < pd.to_datetime('2023-01-01 00:00:00', utc=True))]
                     X_test['nuclear_avail_rte_FR'] += additional_nuc_avail
             elif target == 'ES_price':
-                file_path = './data/{}/dataset_all_features/data_selected_2018-2023.csv'.format(data_version)
+                file_path = './data/dataset_all_features/data_selected_2018-2023.csv'
                 dataset_all_features = pd.read_csv(file_path, index_col=0, parse_dates=True)
                 X_test = X_test[(X_test.index >= pd.to_datetime('2022-06-15 00:00:00', utc=True)) & (X_test.index < pd.to_datetime('2023-02-27 00:00:00', utc=True))]
                 X_test['gas_price_ES'] = dataset_all_features.loc[X_test.index, 'gas_price_MIBGAS']
@@ -89,7 +82,7 @@ for target in targets:
                 'calculating actual Shapley flow edge credits instead.')
 
         model = xgb.Booster()
-        model.load_model("./models/{}/{}_best.json".format(version, model_name))
+        model.load_model("./models/{}_best.json".format(model_name))
         seed = 7
         
         n_bg = 96 # number of sampled background samples
@@ -102,11 +95,11 @@ for target in targets:
 
         # save foreground and background samples for later use (e.g. for plotting)
         if not args.what_if:
-            bg.to_csv('./credit_flow/{}/bg_{}.csv'.format(version, model_name), sep=',', index=True)
-            fg.to_csv('./credit_flow/{}/fg_{}.csv'.format(version, model_name), sep=',', index=True)
+            bg.to_csv('./credit_flow/bg_{}.csv'.format(model_name), sep=',', index=True)
+            fg.to_csv('./credit_flow/fg_{}.csv'.format(model_name), sep=',', index=True)
         else:
-            bg.to_csv('./credit_flow/{}/what_if/bg_{}.csv'.format(version, model_name), sep=',', index=True)
-            fg.to_csv('./credit_flow/{}/what_if/fg_{}.csv'.format(version, model_name), sep=',', index=True)
+            bg.to_csv('./credit_flow/what_if/bg_{}.csv'.format(model_name), sep=',', index=True)
+            fg.to_csv('./credit_flow/what_if/fg_{}.csv'.format(model_name), sep=',', index=True)
 
         causal_links = CausalLinks()
         categorical_feature_names = []
@@ -148,14 +141,14 @@ for target in targets:
                                         target_name=target,# target_name=target_name,
                                         method='xgboost')
         if not args.what_if:
-            with open('./credit_flow/{}/causal_graph_{}.pkl'.format(version, model_name), 'wb') as file:
+            with open('./credit_flow/causal_graph_{}.pkl'.format(model_name), 'wb') as file:
                 dill.dump(causal_graph, file)
-            with open('./credit_flow/{}/r2_scores_{}.pkl'.format(version, target), 'wb') as file:
+            with open('./credit_flow/r2_scores_{}.pkl'.format(target), 'wb') as file:
                 dill.dump(r2_scores, file)
         else:
-            with open('./credit_flow/{}/what_if/causal_graph_{}.pkl'.format(version, model_name), 'wb') as file:
+            with open('./credit_flow/what_if/causal_graph_{}.pkl'.format(model_name), 'wb') as file:
                 dill.dump(causal_graph, file)
-            with open('./credit_flow/{}/what_if/r2_scores_{}.pkl'.format(version, target), 'wb') as file:
+            with open('./credit_flow/what_if/r2_scores_{}.pkl'.format(target), 'wb') as file:
                 dill.dump(r2_scores, file)
 
         #calculate multiple background result (same as in income.ipynb in the Shapley Flow repository) 
@@ -185,9 +178,9 @@ for target in targets:
         cf.edge_credit = edge_credits2edge_credit(edge_credits, cf.graph)
         
         if not args.what_if:
-            directory = './credit_flow/{}'.format(version)
+            directory = './credit_flow'
         else:
-            directory = './credit_flow/{}/what_if'.format(version)
+            directory = './credit_flow/what_if'
 
         if not os.path.exists(directory):
             os.makedirs(directory)

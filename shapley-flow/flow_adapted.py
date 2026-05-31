@@ -1,8 +1,10 @@
 '''
-This file contains implementation of the Shapley Flow algorithm
-Author: Jiaxuan Wang
+This file contains an adapted implementation (adapted functions: "build_feature_graph") of the Shapley Flow algorithm (Author: Jiaxuan Wang)
 
 The word baseline is used interchangeably with background
+
+The functions credit2dot_pygraphviz, credit2dot_graphviz, credit2dot and viz_graph are adapted from the original implementation in shapley flow, 
+but they are implemented in utils/helper_functions.py.
 '''
 import subprocess
 import time
@@ -25,6 +27,8 @@ import dill
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
+from pygraphviz import AGraph
+from graphviz import Source 
 
 class GraphIterator:
     '''
@@ -131,7 +135,7 @@ class Graph:
         assert check_child_args_consistency(self), "child parent not consistent"
         assert check_DAG(self), "not a dag anymore"
 
-    def fit_missing_links(self, X, method='xgboost'):
+    def build_feature_graph(self, X, method='xgboost'):
         '''
         X is assumed to be a dataframe
 
@@ -148,15 +152,10 @@ class Graph:
         for node in pbar:
             pbar.set_description(f'learning dependency for {node.name}')
 
-            # # learn a new model here
-            # X_train, X_test, y_train, y_test = train_test_split(
-            #     X[[p.name for p in node.args]],
-            #     np.array(X[node.name]), test_size=0.2, random_state=42)
-
-            #!!! do also a time based split to avoid data leakage
+            # we do a time based split with blocks of 1 day to avoid data leakage for time series data
             block_size = '1D'
             masker = [pd.Series(g.index) for n, g in X.groupby(pd.Grouper(freq=block_size))]
-            train_mask, test_mask = train_test_split(masker, test_size = 0.2, random_state=39) #39
+            train_mask, test_mask = train_test_split(masker, test_size = 0.2, random_state=39) 
 
 
             X_train = X[[p.name for p in node.args]].loc[pd.concat(train_mask)]
@@ -165,7 +164,6 @@ class Graph:
             y_test = X[node.name].loc[pd.concat(test_mask)]
 
             masker_train = [pd.Series(g.index) for n, g in X_train.groupby(pd.Grouper(freq=block_size)) if len(g) > 0]
-            # masker_train = [pd.Series(g.index) for n, g in X_train.resample('1D') if len(g) > 0]
             train_train_mask, train_val_mask = train_test_split(masker_train, test_size = 0.2, random_state=21)
 
             
@@ -184,25 +182,17 @@ class Graph:
                 if node.is_categorical:
                     num_class = len(np.unique(X[node.name]))
                     params = {
-                        #"eta": 0.002,
-                        #"max_depth": 3,
                         'objective': 'multi:softprob',
-                        #'eval_metric': 'mlogloss',
                         'num_class': num_class,
-                        #"subsample": 0.5
                     }
                 else:
                     params = {
-                        #"eta": 0.002,
-                        #"max_depth": 3,
                         'objective': 'reg:squarederror',
-                        #'eval_metric': 'rmse',
-                        #"subsample": 0.5,
                     }
                 m = xgboost.train(params, xgb_train_train, 2000,
                                   evals = [(xgb_train_val, "val")],
                                   verbose_eval=500,
-                                  early_stopping_rounds=50) # False)
+                                  early_stopping_rounds=50)
                 print(m.best_iteration)
                 m_new = xgboost.train(params, xgb_train, m.best_iteration)
                 r2 = r2_score(y_test, m.predict(xgb_test))
@@ -211,35 +201,21 @@ class Graph:
                 print('r2 score for ', node.name, ': ', r2)
                 print('r2 score for retrained model for ', node.name, ': ', r2_new)
 
-                # m = xgboost.XGBRegressor(objective='reg:squarederror',  
-                #                         n_estimators=2000,
-                #                         verbosity=1, 
-                #                         early_stopping_rounds=50,
-                #                         n_jobs=-1)
-                # m.fit(X_train_train, y_train_train, eval_set=[(X_train_val, y_train_val)], verbose=50)
-                # #!!!
-                # r2 = r2_score(y_test, m.predict(X_test))
-                #print('r2 score for ', node.name, ': ', r2)
-                #r2_scores[node.name] = r2
-                # print(f"best iteration for {node.name}: {m.best_iteration}")
-
                 print('Model finalized for node ', node.name)
 
                 node.f = create_xgboost_f([a.name for a in node.args], m_new)
             else:
                 m = LinearRegression().fit(X_train, y_train)
-                #!!!
-                #r2 = r2_score(y_test, m.predict(X_test))
-                #print('r2 score for ', node.name, ': ', r2)
-                #r2_scores[node.name] = r2
+                r2 = r2_score(y_test, m.predict(X_test))
+                r2_scores[node.name] = r2
+                print('r2 score for ', node.name, ': ', r2)
                 node.f = create_linear_f([a.name for a in node.args], m.predict)
-        return r2_scores #!!! not clean as LinearRegression doesn't have R2-score calculation yet
+        return r2_scores 
                 
     def to_graphviz(self, rankdir="BT"):
         '''
         convert to graphviz format
         '''
-        from pygraphviz import AGraph
         G = AGraph(directed=True, rankdir=rankdir)
         for node1 in topo_sort(self.nodes):
             for node2 in node1.args:
@@ -544,7 +520,6 @@ class CreditFlow:
         '''
         initialize self.dot with the graph structure
         '''
-        from pygraphviz import AGraph
         self.rankdir = self.rankdir if hasattr(self, "rankdir") else "TB"
         dot = AGraph(directed=True, rankdir=self.rankdir)
         for node in topo_sort(graph):
@@ -830,7 +805,7 @@ class CreditFlow:
         assert method_type in ["path", "distributed"], "currently only support path and distributed in run"
         
         if method == 'bruteforce_sampling':
-            assert self.nruns > 0, f"{method} does not support negative nruns, plz try divide_and_conquer"
+            assert self.nruns > 0, f"{method} does not support negative nruns, please try divide_and_conquer"
             if method_type == "path":
                 self.run_bruteforce_sampling_set()
             elif method_type == "distributed":
@@ -864,8 +839,7 @@ class CreditFlow:
         pygraphviz version of credit2dot
 
         idx: the index of target to visualize, if negative assumes sum
-        '''
-        from pygraphviz import AGraph        
+        '''     
         self.rankdir = self.rankdir if hasattr(self, "rankdir") else "TB"
         G = AGraph(directed=True, rankdir=self.rankdir)
 
@@ -1532,11 +1506,11 @@ def dill_run(cf_str):
     return edge_credit
     
 def viz_graph(G):
-    '''only applicable in ipython notebook setting 
+    '''
+    only applicable in ipython notebook setting 
     convert G (pygraphviz) to graphviz format and display with 
     ipython display
-    '''
-    from graphviz import Source    
+    '''   
     display(Source(G.string()))
 
 def save_graph(G, name, layout="dot"):
@@ -2333,42 +2307,3 @@ def build_feature_graph(X, causal_links, categorical_feature_names=[],
     r2_scores = graph.fit_missing_links(X, method=method)
     return graph, r2_scores
 
-def sample_build_graph():
-    '''
-    build and return a graph (list of nodes), to be runnable in main
-    '''
-    # build the graph: x1->x2, y = x1 + x2
-    x1 = Node('x1')
-    x2 = Node('x2', lambda x1: x1, [x1])
-    y  = Node('target', lambda x1, x2: x1 + x2, [x1, x2], is_target_node=True)
-
-    # initialize the values from data: now is just specified
-    graph = Graph([x1, x2, y],
-                  # sample background value
-                  {'x1': lambda: 0},
-                  # target to explain
-                  {'x1': lambda: 1})
-
-    return graph
-
-# sample runs
-def example_detailed():
-    ''' 
-    an example with detailed control over the algorithm
-    '''
-    graph = sample_build_graph()
-    cf = CreditFlow(graph, verbose=False, nruns=1)
-    cf.run()
-    cf.print_credit() # cf.draw() if using ipython notebook
-
-def example_concise():
-    '''
-    an example with recommended way of running the module
-    '''
-    graph = sample_build_graph()
-    explainer = GraphExplainer(graph, pd.DataFrame.from_dict({'x1': [0]}))
-    cf = explainer.shap_values(pd.DataFrame.from_dict({'x1': [1]}))
-    cf.print_credit() # cf.draw() if using ipython notebook
-
-if __name__ == '__main__':
-    example_concise()

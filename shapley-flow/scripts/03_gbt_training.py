@@ -1,15 +1,9 @@
 import pandas as pd
-import numpy as np
-
 import xgboost as xgb
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import datetime
 import os
-import matplotlib.pyplot as plt
 import pickle
-#from pytorch_forecasting.metrics import SMAPE
-import torch
 from scipy.stats import randint, uniform
 
 import sys
@@ -25,16 +19,10 @@ from utils.helper_functions import read_csv_between, read_csv_incl_timeindex
 
 
 reduced_features = True
-if reduced_features:
-    version = 'revision/reduced_features'
-    data_version = 'revision' # this is just implemented to load the data from the same folder in both cases
-else:
-    version = 'revision'
-    data_version = version
 
 date = datetime.datetime.now().strftime("%Y-%m-%d")
 
-directory = './models/{}'.format(version)
+directory = './models'
 if os.path.exists(directory):
     print("Directory {} already exists. Models will be overwritten.".format(directory))
     
@@ -47,23 +35,23 @@ for country in countries:
         targets = ['ES_price']
     for target in targets:
         for start_date, end_date in periods:
-            model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date, version)
-            X = read_csv_between('./data/{}/X_{}_full.csv'.format(data_version, country), start_date, end_date)
+            model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date)
+            X = read_csv_between('./data/X_{}_full.csv'.format(country), start_date, end_date)
             X['isworkingday_{}'.format(country)] = X['isworkingday_{}'.format(country)]*1.0 # fixes problem with boolean data types (by making boolean type a float)
-            y = read_csv_between('./data/{}/y_{}_full.csv'.format(data_version, target), start_date, end_date)
+            y = read_csv_between('./data/y_{}_full.csv'.format(target), start_date, end_date)
 
 
 
-            # split data into test and train set
-            # 1-day sliding window split to prevent memorization of target
+            # split data into test and train set using a 1-day sliding window split to prevent memorization of target 
+            # (since data is time series data, we cannot use a random split)
             block_size = '1D'
             masker = [pd.Series(g.index) for n, g in X.groupby(pd.Grouper(freq=block_size))]
             train_mask, test_mask = train_test_split(masker, test_size = 0.2, random_state=21)
 
             X_full = X.copy()
             y_full = y.copy()
-            X_full.to_csv('./data/{}/X_full_{}.csv'.format(data_version, model_name), sep=',', index=True)
-            y_full.to_csv('./data/{}/y_full_{}.csv'.format(data_version, model_name), sep=',', index=True)
+            X_full.to_csv('./data/X_full_{}.csv'.format(model_name), sep=',', index=True)
+            y_full.to_csv('./data/y_full_{}.csv'.format(model_name), sep=',', index=True)
 
             X_train = X.loc[pd.concat(train_mask)]
             y_train = y.loc[pd.concat(train_mask)]
@@ -72,25 +60,25 @@ for country in countries:
 
 
             # save test data in order to calculate shap values later
-            X_test.to_csv('./data/{}/X_test_{}.csv'.format(data_version, model_name), sep=',', index=True)
-            y_test.to_csv('./data/{}/y_test_{}.csv'.format(data_version, model_name), sep=',', index=True)
+            X_test.to_csv('./data/X_test_{}.csv'.format(model_name), sep=',', index=True)
+            y_test.to_csv('./data/y_test_{}.csv'.format(model_name), sep=',', index=True)
             
             # save train data
-            X_train.to_csv('./data/{}/X_train_{}.csv'.format(data_version, model_name), sep=',', index=True)
-            y_train.to_csv('./data/{}/y_train_{}.csv'.format(data_version, model_name), sep=',', index=True)
+            X_train.to_csv('./data/X_train_{}.csv'.format(model_name), sep=',', index=True)
+            y_train.to_csv('./data/y_train_{}.csv'.format(model_name), sep=',', index=True)
             print(X_full.shape, X_train.shape, X_test.shape)
             if reduced_features:
-                with open('./data/{}/features_reduced_model.pkl'.format(data_version), 'rb') as f:
+                with open('./data/features_reduced_model.pkl', 'rb') as f:
                     features_reduced_model = pickle.load(f)
                 X_full = X_full[features_reduced_model[target]]
                 X_train = X_train[features_reduced_model[target]]
                 X_test = X_test[features_reduced_model[target]]
-                X_full.to_csv('./data/{}/X_full_features_reduced_{}.csv'.format(version, model_name), sep=',', index=True)
-                X_train.to_csv('./data/{}/X_train_features_reduced_{}.csv'.format(version, model_name), sep=',', index=True)
-                X_test.to_csv('./data/{}/X_test_features_reduced_{}.csv'.format(version, model_name), sep=',', index=True)
-                y_full.to_csv('./data/{}/y_full_{}.csv'.format(version, model_name), sep=',', index=True) # y is saved in two folders at the moment
-                y_train.to_csv('./data/{}/y_train_{}.csv'.format(version, model_name), sep=',', index=True)
-                y_test.to_csv('./data/{}/y_test_{}.csv'.format(version, model_name), sep=',', index=True)
+                X_full.to_csv('./data/X_full_features_reduced_{}.csv'.format(model_name), sep=',', index=True)
+                X_train.to_csv('./data/X_train_features_reduced_{}.csv'.format(model_name), sep=',', index=True)
+                X_test.to_csv('./data/X_test_features_reduced_{}.csv'.format(model_name), sep=',', index=True)
+                y_full.to_csv('./data/y_full_{}.csv'.format(model_name), sep=',', index=True) # y is saved in two folders at the moment
+                y_train.to_csv('./data/y_train_{}.csv'.format(model_name), sep=',', index=True)
+                y_test.to_csv('./data/y_test_{}.csv'.format(model_name), sep=',', index=True)
             print(X_full.shape, X_train.shape, X_test.shape)
 
             masker_train = [pd.Series(g.index) for n, g in X_train.groupby(pd.Grouper(freq=block_size)) if len(g) > 0]
@@ -155,7 +143,7 @@ for country in countries:
             print("Best score: ", random_search.best_score_)
 
             # save best model and best hyperparameters
-            directory = './models/{}'.format(version)
+            directory = './models'
             if not os.path.exists(directory):
                 os.makedirs(directory)
             best_model.save_model('{}/{}_best.json'.format(directory, model_name))

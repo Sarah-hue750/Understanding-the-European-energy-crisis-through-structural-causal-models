@@ -2,9 +2,6 @@ from shapflow.flow import GraphExplainer, node_dict2str_dict
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import graphviz
-import seaborn as sns
-import re
 
 from flow_adapted import FlowDefaultDict
 from collections import defaultdict
