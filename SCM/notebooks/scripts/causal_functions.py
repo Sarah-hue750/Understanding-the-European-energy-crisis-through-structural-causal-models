@@ -6,7 +6,12 @@ import pandas as pd
 import pickle as pkl
 from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import accuracy_score, r2_score, mean_absolute_error, root_mean_squared_error
+from sklearn.metrics import (
+    accuracy_score,
+    r2_score,
+    mean_absolute_error,
+    root_mean_squared_error,
+)
 from sklearn.model_selection import train_test_split
 from scipy.stats import randint, uniform
 from dowhy import gcm
@@ -95,10 +100,13 @@ def train_test_evaluation(selected_graph, data, test_size=0.2):
     data = data.loc[:, nodes].dropna()
     train_df, test_df = split_by_week(data, test_size=test_size)
     causal_model = create_causal_model(graph, train_df)
-    
+
     return causal_model, train_df, test_df
 
-def get_evaluation_on_test(causal_model, train_df, test_df, data_original, normalize=False):
+
+def get_evaluation_on_test(
+    causal_model, train_df, test_df, data_original, normalize=False
+):
     """
     Returns R2, mean absolut error and root mean squared error of the causal model.
     """
@@ -120,13 +128,23 @@ def get_evaluation_on_test(causal_model, train_df, test_df, data_original, norma
                 causal_mechanism, parent_data_test, categorical, 0
             )
         )
-        r2_scores[node] = r2_score(test_df[node], conditional_expectations)
+        r2_scores[node] = float(r2_score(test_df[node], conditional_expectations))
         if normalize:
-            mae_scores[node] = mean_absolute_error(test_df[node], conditional_expectations)*data_original[node].std()
-            rmse_scores[node] = root_mean_squared_error(test_df[node], conditional_expectations)*data_original[node].std()
+            mae_scores[node] = float(
+                mean_absolute_error(test_df[node], conditional_expectations)
+                * data_original[node].std()
+            )
+            rmse_scores[node] = float(
+                root_mean_squared_error(test_df[node], conditional_expectations)
+                * data_original[node].std()
+            )
         else:
-            mae_scores[node] = mean_absolute_error(test_df[node], conditional_expectations)
-            rmse_scores[node] = root_mean_squared_error(test_df[node], conditional_expectations)
+            mae_scores[node] = float(
+                mean_absolute_error(test_df[node], conditional_expectations)
+            )
+            rmse_scores[node] = float(
+                root_mean_squared_error(test_df[node], conditional_expectations)
+            )
 
     return r2_scores, mae_scores, rmse_scores
 
@@ -161,7 +179,7 @@ def get_linear_coefficients(causal_model, data_original, normalize=False):
         for i in range(len(ordered_parents)):
             # denormalize coefficients
             if normalize:
-                coef_[i] = (
+                coef_[i] = float(
                     coef_[i]
                     * data_original[node].std()
                     / data_original[ordered_parents[i]].std()
@@ -169,11 +187,11 @@ def get_linear_coefficients(causal_model, data_original, normalize=False):
                 intercept_ = (
                     intercept_ - coef_[i] * data_original[ordered_parents[i]].mean()
                 )
-            labeled_coef = {
-                ordered_parents[i]: coef_[i] for i in range(len(ordered_parents))
-            }
+        labeled_coef = {
+            ordered_parents[i]: float(coef_[i]) for i in range(len(ordered_parents))
+        }
         # intercept
-        labeled_coef["intercept"] = intercept_
+        labeled_coef["intercept"] = float(intercept_)
         # save in dict
         coefficients[node] = labeled_coef
     return coefficients
@@ -248,16 +266,21 @@ def create_eval_scm(
         with open(causal_model_path, "wb") as f:
             pkl.dump(causal_model, f)
     train_df, test_df = split_by_week(data, test_size=0.2)
-    r2_scores, mae_scores, rmse_scores = get_evaluation_on_test(causal_model, train_df, test_df, data_original = df_data_original, normalize=normalize)
-        
+    r2_scores, mae_scores, rmse_scores = get_evaluation_on_test(
+        causal_model,
+        train_df,
+        test_df,
+        data_original=df_data_original,
+        normalize=normalize,
+    )
 
     dir_r2_scores = os.path.join(dir, "r2_scores")
     save_file(r2_scores, dir=dir_r2_scores, filename=f"{name}_{years}_r2_scores")
-        
+
     dir_mae_scores = os.path.join(dir, "mae_scores")
     save_file(mae_scores, dir=dir_mae_scores, filename=f"{name}_{years}_mae_scores")
-        
-    dir_rmse_scores= os.path.join(dir, "rmse_scores_scores")
+
+    dir_rmse_scores = os.path.join(dir, "rmse_scores")
     save_file(rmse_scores, dir=dir_rmse_scores, filename=f"{name}_{years}_rmse_scores")
 
     if with_coefficients:
