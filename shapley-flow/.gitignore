@@ -165,6 +165,9 @@ models/v1/
 plots/
 credit_flow/v1/
 credit_flow/v2/
+credit_flow/
+results/
+models/
 evaluation/
 old/
 notes_causality_prices/
