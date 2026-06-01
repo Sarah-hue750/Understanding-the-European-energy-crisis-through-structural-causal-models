@@ -177,4 +177,7 @@ list_target_nodes = ['air_temp_era5_FR', 'carbon_price_FR',
        'rl_PT', 'run_off_gen_ES', 'solar_da_ES', 'ssrd_ES', 'wind_da_ES',
        'wind_speed_100m_ES']
 
-additional_nuc_avail = 10000 # constant added to nuclear availability features for what-if scenario analysis; number in MW, this is just a hypothetical number to show the potential impact of increased nuclear availability, not based on actual data
+# constant added to nuclear availability features for what-if scenario analysis; 
+# number in MW, this is just a hypothetical number to show the potential impact of increased nuclear availability, 
+# not based on actual data
+additional_nuc_avail = 10000 

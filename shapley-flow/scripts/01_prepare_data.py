@@ -9,9 +9,8 @@ sys.path.append("../")
 from utils.feature_configuration import edges_FR_price, edges_FR_export, edges_ES_price
 
 skip_plot = False
-data_version = 'revision'
 
-file_path = './data/{}/dataset_all_features/data_selected_2018-2023.csv'.format(data_version)
+file_path = './data/data_selected_2018-2023.csv'
 data = pd.read_csv(file_path)
 # add timestamp index
 data.index = pd.to_datetime(data['timestamp'])
@@ -39,7 +38,7 @@ for col in data.columns:
         print('Column not used in FR and ES analysis:', col)
 
 
-# Prepare data for price models and export model (for FR)
+# Prepare data for price models and export model (for France only, as we don't use an export model for Spain)
 prev_col = data.shape[0]
 X_FR = data.loc[~data[columns_FR].isna().any(axis=1), columns_FR].copy()
 print("Number of rows without (was 'with' before !?) NA in selected columns for FR price model: ", X_FR.shape[0], " out of ", prev_col)
@@ -64,7 +63,7 @@ X_ES.loc[:,'hour_cos'] = np.cos(timestamp.hour/24*2*np.pi)
 y_ES_price = X_ES.loc[:, 'price_da_ES']
 X_ES = X_ES.drop(columns=['price_da_ES'])
 
-directory = './data/{}'.format(data_version)
+directory = './data'
 if os.path.exists(directory):
     print('Directory {} already exists.'.format(directory))
 if not os.path.exists(directory):
@@ -77,24 +76,24 @@ X_FR.to_csv('{}/X_FR_full.csv'.format(directory), sep=',', index=True)
 X_ES.to_csv('{}/X_ES_full.csv'.format(directory), sep=',', index=True)
 
 # Save features that have a direct edge in the causal graph to the target variable, 
-# to be used for a reduced model in the Shapley flow analysis
-features_reduced_model = {}
-features_reduced_model['FR_price'] = []
+# to be used for a "target model" (the model predicting the target variable) in the Shapley flow analysis
+features_target_model = {}
+features_target_model['FR_price'] = []
 for node1,node2 in edges_FR_price:
     if node2 == 'price_da_FR':
-        features_reduced_model['FR_price'].append(node1)
-features_reduced_model['FR_export'] = []
+        features_target_model['FR_price'].append(node1)
+features_target_model['FR_export'] = []
 for node1,node2 in edges_FR_export:
     if node2 == 'net_export_FR':
-        features_reduced_model['FR_export'].append(node1)
-features_reduced_model['ES_price'] = []
+        features_target_model['FR_export'].append(node1)
+features_target_model['ES_price'] = []
 for node1,node2 in edges_ES_price:
     if node2 == 'price_da_ES':
-        features_reduced_model['ES_price'].append(node1)
+        features_target_model['ES_price'].append(node1)
 
-directory = './data/{}'.format(data_version)
+directory = './data'
 if not os.path.exists(directory):
     os.makedirs(directory)
     
-with open('{}/features_reduced_model.pkl'.format(directory), 'wb') as f:
-    pickle.dump(features_reduced_model, f)
+with open('{}/features_target_model.pkl'.format(directory), 'wb') as f:
+    pickle.dump(features_target_model, f)

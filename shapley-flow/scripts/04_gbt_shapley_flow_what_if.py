@@ -4,27 +4,23 @@ sys.path.append('../../.')
 from pathlib import Path
 # Resolve parent of this file (file's directory → parent)
 PARENT = Path(__file__).resolve().parent.parent
-#PARENT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PARENT))
 
-
-import numpy as np
 import pandas as pd
-
 import xgboost as xgb
 
-from shapflow.flow import CausalLinks
-from shapflow.flow import build_feature_graph
-from shapflow.flow import GraphExplainer
-from shapflow.flow import edge_credits2edge_credit, node_dict2str_dict
-from shapflow.flow import translator, create_xgboost_f
-from shapflow.flow import Node, Graph
-from shapflow.flow import CreditFlow
+from shapflow.flow import (
+    CausalLinks,
+    build_feature_graph,
+    GraphExplainer,
+    edge_credits2edge_credit,
+    create_xgboost_f,
+    translator,
+)
 
-from shap_flow_util import read_csv_incl_timeindex, read_csv_between
+from utils.helper_functions import read_csv_incl_timeindex, calculate_edge_credit
 
-#!!! plot r2-score of surrogate models for each node in the graph to check if the model is good enough
-from flow_adapted import build_feature_graph
+from flow_adapted import CausalLinks, build_feature_graph
 
 
 import time
@@ -32,13 +28,11 @@ import dill
 import tqdm
 import multiprocess as mp
 import os
-from shap_flow_util import calculate_edge_credit
 
 import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Calculate Shapley flow edge credits for GBT model')
-    parser.add_argument('--reduced_features', default=True, help='Whether to use reduced feature set'),
     parser.add_argument('--target', type=str, default='FR_price', help='Target variable to explain')    
     return parser.parse_args()
 
@@ -51,49 +45,12 @@ edges_ES = [('hour_sin', 'rl_FR'), ('hour_sin', 'rl_PT'), ('hour_sin', 'load_da_
 
 target_names = ['price_da_FR', 'net_export_FR', 'price_da_ES']
 
-# periods = [('2018-01-01', '2021-09-30'),
-#             ('2021-10-01', '2023-12-31'),
-#             ('2018-01-01', '2023-12-31')]
-#version = 'v2'
-
-
-reduced_features = args.reduced_features #True
-if reduced_features:
-    version = 'revision/reduced_features'
-    data_version = 'revision' # this is just implemented to load the data from the same folder in both cases
-else:
-    version = 'revision'
-    data_version = version
-
 periods = [('2018-01-01', '2023-12-31')]
-# targets = ['price', 'export']
-# for target in targets:
-#     for start_date, end_date in periods:
-#         model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date, version)
-#         X_test = read_csv_incl_timeindex('./data/{}/X_test_{}.csv'.format(version, model_name))
-#         X_test['isworkingday'] = X_test['isworkingday']*1.0
 
-
-# countries = ['FR'] # !!! , 'ES'
-# for country in countries:
-#     if country == 'FR':
-#         targets = ['FR_price'] # !!! , 'FR_export'
-#         #other_country = 'ES'
-#     elif country == 'ES':
-#         targets = ['ES_price']
-#         #other_country = 'FR'
-#         edges = edges_ES
-#     for target in targets:
-#         if (country == 'FR') and (target == 'FR_price'):
-#             edges = edges_FR_price
-#         elif (country == 'FR') and (target == 'FR_export'):
-#             edges = edges_FR_export
-
-#!!! include full models to substitute gas/nuc. avail. data
-file_path = '../data_collection_juelich/data_version4/data_selected_2018-2023.csv'
+file_path = 'data/data_selected_2018-2023.csv'
 data_full = pd.read_csv(file_path, index_col=0, parse_dates=True)
 
-targets = [args.target] #['FR_export'] #, 'FR_export', 'ES_price''
+targets = [args.target]
 
 
 for target in targets:
@@ -106,14 +63,13 @@ for target in targets:
         edges = edges_ES
 
     for start_date, end_date in periods:
-        model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date, version)
-        #!!! include also full dataset
-        X_full = read_csv_incl_timeindex('./data/{}/X_full_{}.csv'.format(data_version, model_name))
-        X_train = read_csv_incl_timeindex('./data/{}/X_train_{}.csv'.format(data_version, model_name))
+        model_name = 'xgb_{}_start_{}_end_{}'.format(target, start_date, end_date)
+        
+        X_full = read_csv_incl_timeindex('./data/X_full_{}.csv'.format(model_name))
+        X_train = read_csv_incl_timeindex('./data/X_train_{}.csv'.format(model_name))
 
-        X_test = read_csv_incl_timeindex('./data/{}/X_test_{}.csv'.format(data_version, model_name))
-        if reduced_features:
-            X_test_features_reduced = read_csv_incl_timeindex('./data/{}/X_test_features_reduced_{}.csv'.format(version, model_name))
+        X_test = read_csv_incl_timeindex('./data/X_test_{}.csv'.format(model_name))
+        X_test_features_target = read_csv_incl_timeindex('./data/X_test_features_target_{}.csv'.format(model_name))
 
         if target == 'FR_price':
             additional_nuc_avail = 10000
@@ -122,71 +78,34 @@ for target in targets:
             X_test['nuclear_avail_rte_FR'] += additional_nuc_avail
             print(X_test['nuclear_avail_rte_FR'].head())
         elif target == 'ES_price':
-            print(X_test['gas_price_ES'].head())
             X_test = X_test[(X_test.index >= pd.to_datetime('2022-06-15 00:00:00', utc=True)) & (X_test.index < pd.to_datetime('2023-02-27 00:00:00', utc=True))]
-            print(X_test['gas_price_ES'].head())
-            X_test['gas_price_ES'] = data_full.loc[X_test.index, 'gas_price_MIBGAS'] # !!! substitute with real data (instead of just increasing it by a constant value) to be more realistic
-            print(X_test['gas_price_ES'].head())
+            # substitute with real data from dataset_all_features; 
+            # this is just for being able to calculate what-if Shapley flow edge credits 
+            # for a change in gas price in Spain, which is not included in the test set of the model, but is included in the full dataset.
+            X_test['gas_price_ES'] = data_full.loc[X_test.index, 'gas_price_MIBGAS']  
         print(X_test.shape)
 
         model = xgb.Booster()
-        model.load_model("./models/{}/{}_best.json".format(version, model_name))
+        model.load_model("./models/{}_best.json".format(model_name))
         seed = 7
         
-        n_bg = 96 #100 # number of sampled background samples
-        nsamples = 1000 # number of forefround samples to explain
-        nruns = 750 #1000 #500
-        # n_bg = 200 # number of sampled background samples
-        # nsamples = 300 # number of forefround samples to explain
-        # nruns = 100
-        #!!! choose background samples from training set to be more realistic (and also to be able to use full dataset for building surrogate models instead of only test set)
+        n_bg = 96 # number of sampled background samples 
+        nsamples = 1000 # number of foreground samples to explain
+        nruns = 750 # number of runs for Shapley flow (number of permutations to sample for Shapley value estimation)
+
+        # choose background samples from training set and foreground samples from test set (this is just for consistency with the Shapley flow framework)
         bg = X_train.sample(n=n_bg, random_state=seed) # background samples
         fg = X_test.sample(n=nsamples, random_state=seed) # foreground samples (samples to explain)
 
-        bg.to_csv('./credit_flow/{}/what_if/bg_{}.csv'.format(version, model_name), sep=',', index=True)
-        fg.to_csv('./credit_flow/{}/what_if/fg_{}.csv'.format(version, model_name), sep=',', index=True)
+        bg.to_csv('./credit_flow/what_if_scenarios/bg_{}.csv'.format(model_name), sep=',', index=True)
+        fg.to_csv('./credit_flow/what_if_scenarios/fg_{}.csv'.format(model_name), sep=',', index=True)
 
         causal_links = CausalLinks()
         categorical_feature_names = []
-        # display_translator = translator(X_test.columns, X_test, X_test)
-        #!!!
         display_translator = translator(X_full.columns, X_full, X_full)
-        # if target == 'price':
-        #     target_name = 'price_da'
-        # elif target == 'export':
-        #     target_name = 'agg_net_export'
-        # else:
-        #     Exception('target unknown')
 
         feature_names = list(X_test.columns)
-        if reduced_features:
-            feature_names_reduced = list(X_test_features_reduced.columns)
-
-        # year_features = ['day_of_year_sin', 'day_of_year_cos']
-        # causal_links.add_causes_effects(year_features, ['gas_price_{}'.format(country)])
-        
-        # year_hour_features = year_features + ['hour_sin', 'hour_cos']
-        # wind_solar_da = ['wind_da_{}'.format(country), 'solar_da_{}'.format(country)]
-        # load_rl = ['load_da_{}'.format(country)]#, 'rl_BE']#, 'rl_ES', 'rl_DE_LU', 'rl_IT_NORD']
-        # if country == 'FR':
-        #     load_rl += ['rl_BE', 'rl_ES', 'rl_DE_LU', 'rl_IT_NORD']
-        # elif country == 'ES':
-        #     load_rl += ['rl_FR', 'rl_PT']
-        # nuc_ror = ['run_off_gen_{}'.format(country)]
-        # if country == 'FR':
-        #     nuc_ror += ['nuclear_avail_rte_FR']
-        # elif country == 'ES':
-        #     nuc_ror += ['nuclear_avail_esios_ES']
-        # causal_links.add_causes_effects(year_hour_features, wind_solar_da + load_rl + nuc_ror)
-        
-        # river_temp_flow = ['river_temp_{}'.format(country), 'river_flow_mean_{}'.format(country)]
-        # causal_links.add_causes_effects(['air_temp_era5_{}'.format(country)], river_temp_flow)
-        
-        # causal_links.add_causes_effects(river_temp_flow, nuc_ror)
-        
-        # causal_links.add_causes_effects(['air_temp_era5_{}'.format(country)], wind_solar_da + load_rl)
-        
-        # causal_links.add_causes_effects(['isworkingday_{}'.format(country)],load_rl + nuc_ror) #  ['rl_{}_ramp'.format(country)] + 
+        feature_names_target = list(X_test_features_target.columns)
         
         for edge in edges:
             node_cause = edge[0]
@@ -197,34 +116,27 @@ for target in targets:
                 #print('skip adding edge to target: {} -> {}'.format(node_cause, node_effect))
                 causal_links.add_causes_effects(node_cause, node_effect)
 
-        if reduced_features:
-            causal_links.add_causes_effects(feature_names_reduced, 
-                                            target, #target_name, 
-                                            create_xgboost_f(feature_names_reduced, model))
-            print(feature_names, '\n',feature_names_reduced)
-        else:
-            causal_links.add_causes_effects(feature_names, 
-                            target, #target_name, 
-                            create_xgboost_f(feature_names, model))
-            print(feature_names, '\n',feature_names)
+        causal_links.add_causes_effects(feature_names_target, 
+                                        target, #target_name, 
+                                        create_xgboost_f(feature_names_target, model))
+        print(feature_names, '\n',feature_names_target)
 
-        causal_graph, r2_scores = build_feature_graph(X_full,  # !!! use full dataset instead of test set!!!
+        causal_graph, r2_scores = build_feature_graph(X_full,
                                         causal_links=causal_links, 
                                         categorical_feature_names=categorical_feature_names,
                                         display_translator=display_translator,
                                         target_name=target,# target_name=target_name,
                                         method='xgboost')
-        with open('./credit_flow/{}/what_if/causal_graph_{}.pkl'.format(version, model_name), 'wb') as file:
+        with open('./credit_flow/what_if_scenarios/causal_graph_{}.pkl'.format(model_name), 'wb') as file:
             dill.dump(causal_graph, file)
-        with open('./credit_flow/{}/what_if/r2_scores_{}.pkl'.format(version, target), 'wb') as file:
+        with open('./credit_flow/what_if_scenarios/r2_scores_{}.pkl'.format(model_name), 'wb') as file:
             dill.dump(r2_scores, file)
         # causal_graph.draw(rankdir = 'TB')
         # g = causal_graph.to_graphviz('LR')
 
-        #calculate multiple background result (same as in income.ipynb)
+        # calculate multiple background result (same as in income.ipynb)
         # change this to a suitable value, depending on machine (e.g. 6, 12; on cluster 20)
         num_processes = 96 #20
-        from shap_flow_util import calculate_edge_credit
 
         start = time.time()
 
@@ -247,7 +159,7 @@ for target in targets:
         # save credit flow to file
         cf.edge_credit = edge_credits2edge_credit(edge_credits, cf.graph)
         
-        directory = './credit_flow/{}/what_if'.format(version)
+        directory = './credit_flow/what_if'
         if not os.path.exists(directory):
             os.makedirs(directory)
         with open('{}/flow_{}.pkl'.format(directory, model_name), 'wb') as file:
