@@ -10,7 +10,7 @@ from utils.feature_configuration import edges_FR_price, edges_FR_export, edges_E
 
 skip_plot = False
 
-file_path = './data/dataset_all_features/data_selected_2018-2023.csv'
+file_path = './data/data_selected_2018-2023.csv'
 data = pd.read_csv(file_path)
 # add timestamp index
 data.index = pd.to_datetime(data['timestamp'])

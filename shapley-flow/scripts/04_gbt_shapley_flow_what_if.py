@@ -47,7 +47,7 @@ target_names = ['price_da_FR', 'net_export_FR', 'price_da_ES']
 
 periods = [('2018-01-01', '2023-12-31')]
 
-file_path = 'data/dataset_all_features/data_selected_2018-2023.csv'
+file_path = 'data/data_selected_2018-2023.csv'
 data_full = pd.read_csv(file_path, index_col=0, parse_dates=True)
 
 targets = [args.target]
@@ -97,8 +97,8 @@ for target in targets:
         bg = X_train.sample(n=n_bg, random_state=seed) # background samples
         fg = X_test.sample(n=nsamples, random_state=seed) # foreground samples (samples to explain)
 
-        bg.to_csv('./credit_flow/what_if/bg_{}.csv'.format(model_name), sep=',', index=True)
-        fg.to_csv('./credit_flow/what_if/fg_{}.csv'.format(model_name), sep=',', index=True)
+        bg.to_csv('./credit_flow/what_if_scenarios/bg_{}.csv'.format(model_name), sep=',', index=True)
+        fg.to_csv('./credit_flow/what_if_scenarios/fg_{}.csv'.format(model_name), sep=',', index=True)
 
         causal_links = CausalLinks()
         categorical_feature_names = []
@@ -127,9 +127,9 @@ for target in targets:
                                         display_translator=display_translator,
                                         target_name=target,# target_name=target_name,
                                         method='xgboost')
-        with open('./credit_flow/what_if/causal_graph_{}.pkl'.format(model_name), 'wb') as file:
+        with open('./credit_flow/what_if_scenarios/causal_graph_{}.pkl'.format(model_name), 'wb') as file:
             dill.dump(causal_graph, file)
-        with open('./credit_flow/what_if/r2_scores_{}.pkl'.format(model_name), 'wb') as file:
+        with open('./credit_flow/what_if_scenarios/r2_scores_{}.pkl'.format(model_name), 'wb') as file:
             dill.dump(r2_scores, file)
         # causal_graph.draw(rankdir = 'TB')
         # g = causal_graph.to_graphviz('LR')

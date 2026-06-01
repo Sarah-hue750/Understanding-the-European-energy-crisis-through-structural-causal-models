@@ -16,7 +16,7 @@ y_FR_export = read_csv_incl_timeindex('{}/y_FR_export_full.csv'.format(directory
 X_ES = read_csv_incl_timeindex('{}/X_ES_full.csv'.format(directory))
 y_ES_price = read_csv_incl_timeindex('{}/y_ES_price_full.csv'.format(directory))
 
-file_path = './data/dataset_all_features/data_selected_2018-2023.csv'
+file_path = './data/data_selected_2018-2023.csv'
 dataset_all_features = pd.read_csv(file_path)
 # add timestamp index
 dataset_all_features.index = pd.to_datetime(dataset_all_features['timestamp'])

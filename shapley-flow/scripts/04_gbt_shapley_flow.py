@@ -68,7 +68,7 @@ for target in targets:
                     X_test = X_test[(X_test.index >= pd.to_datetime('2022-01-01 00:00:00', utc=True)) & (X_test.index < pd.to_datetime('2023-01-01 00:00:00', utc=True))]
                     X_test['nuclear_avail_rte_FR'] += additional_nuc_avail
             elif target == 'ES_price':
-                file_path = './data/dataset_all_features/data_selected_2018-2023.csv'
+                file_path = './data/data_selected_2018-2023.csv'
                 dataset_all_features = pd.read_csv(file_path, index_col=0, parse_dates=True)
                 X_test = X_test[(X_test.index >= pd.to_datetime('2022-06-15 00:00:00', utc=True)) & (X_test.index < pd.to_datetime('2023-02-27 00:00:00', utc=True))]
                 X_test['gas_price_ES'] = dataset_all_features.loc[X_test.index, 'gas_price_MIBGAS']
@@ -93,8 +93,8 @@ for target in targets:
             bg.to_csv('./credit_flow/bg_{}.csv'.format(model_name), sep=',', index=True)
             fg.to_csv('./credit_flow/fg_{}.csv'.format(model_name), sep=',', index=True)
         else:
-            bg.to_csv('./credit_flow/what_if/bg_{}.csv'.format(model_name), sep=',', index=True)
-            fg.to_csv('./credit_flow/what_if/fg_{}.csv'.format(model_name), sep=',', index=True)
+            bg.to_csv('./credit_flow/what_if_scenarios/bg_{}.csv'.format(model_name), sep=',', index=True)
+            fg.to_csv('./credit_flow/what_if_scenarios/fg_{}.csv'.format(model_name), sep=',', index=True)
 
         causal_links = CausalLinks()
         categorical_feature_names = []
@@ -133,9 +133,9 @@ for target in targets:
             with open('./credit_flow/r2_scores_{}.pkl'.format(target), 'wb') as file:
                 dill.dump(r2_scores, file)
         else:
-            with open('./credit_flow/what_if/causal_graph_{}.pkl'.format(model_name), 'wb') as file:
+            with open('./credit_flow/what_if_scenarios/causal_graph_{}.pkl'.format(model_name), 'wb') as file:
                 dill.dump(causal_graph, file)
-            with open('./credit_flow/what_if/r2_scores_{}.pkl'.format(target), 'wb') as file:
+            with open('./credit_flow/what_if_scenarios/r2_scores_{}.pkl'.format(target), 'wb') as file:
                 dill.dump(r2_scores, file)
 
         #calculate multiple background result (same as in income.ipynb in the Shapley Flow repository) 
