@@ -138,7 +138,7 @@ for target in targets:
             with open('./credit_flow/what_if_scenarios/r2_scores_{}.pkl'.format(target), 'wb') as file:
                 dill.dump(r2_scores, file)
 
-        #calculate multiple background result (same as in income.ipynb in the Shapley Flow repository) 
+        # calculate multiple background result (same as in income.ipynb in the Shapley Flow repository) 
         # in parallel to speed up calculation (this is the most time consuming part)
         # change this to a suitable value, depending on machine (e.g. 6, 12; on cluster 20)
         num_processes = 96 
