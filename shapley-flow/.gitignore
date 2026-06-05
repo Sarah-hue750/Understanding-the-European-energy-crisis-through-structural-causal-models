@@ -162,6 +162,7 @@ cython_debug/
 #.idea/
 
 credit_flow/*
+!credit_flow/.gitkeep
 results/
 models/
 evaluation/
