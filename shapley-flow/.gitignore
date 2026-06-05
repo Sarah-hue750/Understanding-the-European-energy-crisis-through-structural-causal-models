@@ -175,4 +175,3 @@ figs_for_paper/
 data/*.csv
 data/*.pkl
 data/*.txt
-credit_flow/
