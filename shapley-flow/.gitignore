@@ -166,7 +166,6 @@ credit_flow/
 results/
 models/
 evaluation/
-old/
 notes_causality_prices/
 plots/
 decision_plot_shap_tutorial.ipynb
@@ -174,6 +173,6 @@ REVIEWER_COMMENTS.docx
 slurm-*.out
 figs_for_paper/
 data/*.csv
-# data/*.pkl
-# data/*.txt
-credit_flow/*
+data/*.pkl
+data/*.txt
+credit_flow/
