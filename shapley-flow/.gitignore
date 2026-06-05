@@ -163,8 +163,10 @@ cython_debug/
 
 credit_flow/*
 !credit_flow/.gitkeep*
-results/
-models/
+results/*
+!results/.gitkeep*
+models/*
+!models/.gitkeep*
 evaluation/
 notes_causality_prices/
 plots/
@@ -175,3 +177,4 @@ figs_for_paper/
 data/*.csv
 data/*.pkl
 data/*.txt
+!data/.gitkeep*
