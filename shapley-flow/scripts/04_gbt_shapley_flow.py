@@ -30,7 +30,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description='Calculate Shapley flow edge credits for GBT model')
     parser.add_argument('--target', type=str, default='FR_price', help='Target variables to explain. Options are: FR_price, FR_export, ES_price')    
-    parser.add_argument('--what_if', action="store_true", help='Whether to calculate what-if Shapley flow edge credits (instead of actual Shapley flow edge credits)')
+    parser.add_argument('--what_if', action="store_true", help='Whether to calculate Shapley flow edge credits for What-if scenarios instead of actual Shapley flow edge credits')
     return parser.parse_args()
 
 args = parse_args()
@@ -167,7 +167,7 @@ for target in targets:
         if not args.what_if:
             directory = './credit_flow'
         else:
-            directory = './credit_flow/what_if'
+            directory = './credit_flow/what_if_scenarios'
 
         if not os.path.exists(directory):
             os.makedirs(directory)

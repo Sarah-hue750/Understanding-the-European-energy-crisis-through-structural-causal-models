@@ -4,6 +4,7 @@ This part of the repository contains the implementation of the Shapley Flow anal
 The adapted functions for calculating Shapley Flow values, based on https://github.com/nathanwang000/Shapley-Flow is contained in flow_adapted.py.
 
 The repo is structured as follows
+- data: In order to run the GBT models and the Shapley Flow analysis, the data dataset *data_selected_2018-2023* which can be collected via the instructions in *SCM* is supposed to be saved in folder *data*.
 - credit_flow contains the calculated Shapley Flow values as well as Foreground and Background Samples that were used for the calculation.
 - jobs: Scripts for running the Gradient Boosting Tree (GBT) Models as well as Shapley Flow valuzes calculation on a HPC cluster on CPUs.
 - models: Contains the trained GBT models
@@ -17,6 +18,8 @@ In order to run the GBT models and the Shapley Flow analysis, the data dataset *
 |   README.md
 |   requirements.txt
 |       
++---data
+|
 +---credit_flow
 |   |   
 |   \---what_if_scenarios

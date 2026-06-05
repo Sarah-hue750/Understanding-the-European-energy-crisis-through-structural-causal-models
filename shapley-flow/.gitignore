@@ -161,10 +161,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-models/v1/
 plots/
-credit_flow/v1/
-credit_flow/v2/
 credit_flow/
 results/
 models/
@@ -177,5 +174,6 @@ REVIEWER_COMMENTS.docx
 slurm-*.out
 figs_for_paper/
 data/*.csv
-data/*.pkl
-data/*.txt
+# data/*.pkl
+# data/*.txt
+credit_flow/*
