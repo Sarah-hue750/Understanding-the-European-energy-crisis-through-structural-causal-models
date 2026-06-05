@@ -9,7 +9,7 @@ sys.path.insert(0, str(PARENT))
 import pandas as pd
 import xgboost as xgb
 
-from shapflow.flow import (
+from flow_adapted import (
     CausalLinks,
     build_feature_graph,
     GraphExplainer,
