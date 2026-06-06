@@ -4,7 +4,6 @@ sys.path.append('../../.')
 from pathlib import Path
 # Resolve parent of this file (file's directory → parent)
 PARENT = Path(__file__).resolve().parent.parent
-#PARENT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PARENT))
 sys.path.append('../')
 sys.path.append('./')
@@ -84,7 +83,7 @@ for target in targets:
         nsamples = 1000 # number of forefround samples to explain
         nruns = 750 # number of runs for Shapley flow (number of permutations to sample for Shapley value estimation)
 
-        # choose background samples from training set and foreground samples from test set (this is just for consistency with the Shapley flow framework)
+        # choose background samples from training set and foreground samples from test set (this is consistent with the Shapley flow framework)
         bg = X_train.sample(n=n_bg, random_state=seed) # background samples
         fg = X_test.sample(n=nsamples, random_state=seed) # foreground samples (samples to explain)
 
@@ -116,7 +115,7 @@ for target in targets:
         # add edges from features that have a direct effect on the target to the target, 
         # with the function being the trained GBT model (this is the "target model" in the Shapley flow analysis)
         causal_links.add_causes_effects(feature_names_target, 
-                                            target, #target_name, 
+                                            target,
                                             create_xgboost_f(feature_names_target, model))
         print(feature_names, '\n',feature_names_target)
 

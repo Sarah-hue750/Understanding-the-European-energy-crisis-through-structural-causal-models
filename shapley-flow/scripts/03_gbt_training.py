@@ -87,7 +87,7 @@ for country in countries:
             param_dist = {
                 'max_depth': randint(3, 12),
                 'learning_rate': uniform(0.01, 0.3),
-                'subsample': uniform(0.5, 1), # 'subsample': uniform(0.5, 0.5),
+                'subsample': uniform(0.5, 1),
                 'min_child_weight': randint(1, 31),
                 'reg_lambda': uniform(0, 1),
                 'reg_alpha': uniform(0, 1),
@@ -98,7 +98,6 @@ for country in countries:
                 'eval_set': [(X_train_val, y_train_val)],
             }
             xgb_model = xgb.XGBRegressor(objective='reg:squarederror', 
-                                        #n_estimators=1200,
                                         verbosity=1, 
                                         n_jobs=50, 
                                         base_score = y_train.iloc[:, 0].mean(),

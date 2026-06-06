@@ -1,10 +1,13 @@
 '''
-This file contains an adapted implementation (adapted functions: "build_feature_graph") of the Shapley Flow algorithm (Author: Jiaxuan Wang)
+This file contains an adapted implementation of the Shapley Flow algorithm (Author: Jiaxuan Wang)
+
+Modified functions: "build_feature_graph" in Graph class in order to calculate the R^2 scores, 
+and "credit2dot_pygraphviz", "credit2dot_graphviz", "credit2dot" and "viz_graph" in CreditFlow class for modified visualization of the graph 
+(these functions are implemented in utils/helper_functions.py).
+The rest of the code is identical as in the original implementation in shapley-flow/credit_flow/credit_flow.py, 
+except for some minor formatting changes.
 
 The word baseline is used interchangeably with background
-
-The functions credit2dot_pygraphviz, credit2dot_graphviz, credit2dot and viz_graph are adapted from the original implementation in shapley flow, 
-but they are implemented in utils/helper_functions.py.
 '''
 import subprocess
 import time

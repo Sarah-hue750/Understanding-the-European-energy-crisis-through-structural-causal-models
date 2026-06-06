@@ -66,7 +66,9 @@ def credit2dot_pygraphviz(edge_credit, format_str, idx=-1,
                             show_CI = False, color = 'blue', dict_correlation_for_color = None, 
                             show_only_some_feature_selection = False):
     '''
-    pygraphviz version of credit2dot
+    Function modified from the original function in shapflow (https://github.com/nathanwang000/Shapley-Flow)
+
+    pygraphviz version of credit2dot 
 
     idx: the index of target to visualize, if negative assumes sum
     '''     
@@ -100,7 +102,6 @@ def credit2dot_pygraphviz(edge_credit, format_str, idx=-1,
                 vals = [ec[node1.name][node2.name] for ec in edge_credit.ecs]
                 std = np.std(vals)
                 n = len(edge_credit.ecs)
-                # 95% CI
                 a = 1.96 * std/np.sqrt(n)
                 l, r = v - a, v + a
                 edge_label = f"({l:.2f}, {v:.2f}, {r:.2f})"
@@ -216,6 +217,8 @@ def credit2dot(raw_edge_credit,
                    max_display=None, show_fg_val=True, show_CI=False, rankdir = "TB", fold_noise = True, 
                    color = 'blue', dict_correlation_for_color = None, show_only_some_feature_selection = False):
         '''
+Function modified from the original function in shapflow (https://github.com/nathanwang000/Shapley-Flow)
+
         convert the graph to pydot graph for visualization
         e.g.:
         G = cf.credit2dot()
@@ -263,7 +266,10 @@ def credit2dot(raw_edge_credit,
                                           show_CI = show_CI, color = color, dict_correlation_for_color = dict_correlation_for_color,
                                           show_only_some_feature_selection = show_only_some_feature_selection)
 def viz_graph(G):
-    '''only applicable in ipython notebook setting 
+    '''
+    Function modified from the original function in shapflow (https://github.com/nathanwang000/Shapley-Flow)
+
+    only applicable in ipython notebook setting 
     convert G (pygraphviz) to graphviz format and display with 
     ipython display
     '''
@@ -274,6 +280,9 @@ def draw(idx=-1, max_display=None, format_str="{:.2f}",
             edge_credit=None, show_fg_val=True, rankdir = "TB", fold_noise = True, show_CI = False, 
             color = 'blue', dict_correlation_for_color = None, show_only_some_feature_selection = False):
     '''
+
+    Function modified from the original function in shapflow (https://github.com/nathanwang000/Shapley-Flow)
+    
     assumes using ipython notebook
     idx: the index of target to visualize, if negative assumes sum,
             if an iterable, assumes sum over the list of values
